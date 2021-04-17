@@ -1,0 +1,20 @@
+[package]
+edition = '2018'
+name = "deploy-flake"
+version = "0.0.1-dev"
+authors = ["Andreas Fuchs <asf@boinkor.net>"]
+license = "MIT"
+repository = "https://github.com/antifuchs/deploy-flake"
+readme = "README.md"
+description = "Deploy a nix flake to a remote system"
+documentation = "https://docs.rs/deploy-flake"
+
+[badges]
+travis-ci = { repository = "antifuchs/deploy-flake", branch = "master" }
+maintenance = { status = "passively-maintained" }
+
+[package.metadata.template_ci.clippy]
+allow_failure = false
+version = "stable"
+
+[dependencies]
