@@ -9,6 +9,10 @@ readme = "README.md"
 description = "Deploy a nix flake to a remote system"
 documentation = "https://docs.rs/deploy-flake"
 
+[[bin]]
+name = "deploy-flake"
+path = "src/main.rs"
+
 [badges]
 travis-ci = { repository = "antifuchs/deploy-flake", branch = "master" }
 maintenance = { status = "passively-maintained" }
@@ -18,3 +22,7 @@ allow_failure = false
 version = "stable"
 
 [dependencies]
+clap = "3.0.0-beta.2"
+anyhow = "1.0.40"
+serde_json = "1.0.64"
+serde = { version = "1.0.125", features = ["derive"] }
