@@ -1,7 +1,15 @@
 mod nix;
+mod os;
 
-use anyhow::Context;
-use std::path::{Path, PathBuf};
+pub use os::NixOperatingSystem;
+
+use anyhow::{anyhow, bail, Context};
+use os::Nixos;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+    str::FromStr,
+};
 
 /// All the important bits about a nix flake reference.
 #[derive(PartialEq, Clone, Debug)]
@@ -23,12 +31,65 @@ impl Flake {
             resolved_path: info.path,
         })
     }
+
+    /// Returns the store path of the flake as a utf-8 string.
+    pub fn resolved_path(&self) -> &str {
+        self.resolved_path
+            .to_str()
+            .expect("Resolved flake path must be utf-8 clean")
+    }
+
+    /// Synchronously copies the store path closure to the destination host.
+    pub fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
+        let result = Command::new("nix-copy-closure")
+            .args(&[to, self.resolved_path()])
+            .status()?;
+        if !result.success() {
+            bail!("nix-copy-closure failed");
+        }
+        Ok(())
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+/// The kind of operating system we deploy to
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Flavor {
+    /// NixOS, the default.
+    Nixos,
+}
+
+impl Default for Flavor {
+    fn default() -> Self {
+        Flavor::Nixos
+    }
+}
+
+impl FromStr for Flavor {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "nixos" => Ok(Flavor::Nixos),
+            s => Err(anyhow!(
+                "Can not parse {:?} - only \"nixos\" is a valid flavor",
+                s
+            )),
+        }
+    }
+}
+
+impl ToString for Flavor {
+    fn to_string(&self) -> String {
+        match self {
+            Flavor::Nixos => "nixos".to_string(),
+        }
+    }
+}
+
+impl Flavor {
+    pub fn on_connection(&self, connection: openssh::Session) -> Box<dyn NixOperatingSystem> {
+        match self {
+            Flavor::Nixos => Box::new(Nixos::new(connection)),
+        }
     }
 }
