@@ -1,6 +1,7 @@
 mod nix;
 mod os;
 
+use log::kv::Value;
 pub use os::NixOperatingSystem;
 
 use anyhow::{anyhow, bail, Context};
@@ -48,6 +49,10 @@ impl Flake {
             bail!("nix-copy-closure failed");
         }
         Ok(())
+    }
+
+    pub fn as_value(&self) -> Value {
+        Value::capture_debug(self)
     }
 }
 
