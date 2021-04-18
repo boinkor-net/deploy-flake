@@ -2,7 +2,7 @@ mod nix;
 mod os;
 
 use log::kv::Value;
-pub use os::NixOperatingSystem;
+pub use os::{NixOperatingSystem, Verb};
 
 use anyhow::{anyhow, bail, Context};
 use os::Nixos;
@@ -92,9 +92,13 @@ impl ToString for Flavor {
 }
 
 impl Flavor {
-    pub fn on_connection(&self, connection: openssh::Session) -> Box<dyn NixOperatingSystem> {
+    pub fn on_connection(
+        &self,
+        host: &str,
+        connection: openssh::Session,
+    ) -> Box<dyn NixOperatingSystem> {
         match self {
-            Flavor::Nixos => Box::new(Nixos::new(connection)),
+            Flavor::Nixos => Box::new(Nixos::new(host.to_owned(), connection)),
         }
     }
 }
