@@ -27,3 +27,15 @@ What `deploy-flake` does that I think are advantages over `deploy-rs`:
 * Better system activation story: The flake configuration is first applied via `nixos-rebuild test`, and only if that works, added to the boot entries via `nixos-rebuild boot`.
 
 * Nicer story around running the activation process in the background: It uses `systemd-run` to spawn the activation as a systemd unit, which will allow the control process to get disconnected at any point in time & the deployment can continue.
+
+# Usage
+
+Once you installed this binary on your path via `cargo install`, cd into your flake's source directory and run:
+
+`deploy-flake destination-host`
+
+(You can also use `--flake /path/to/flake/source/`).
+
+That will copy the flake to `destination-host` via SSH, then try to test the config with `nixos-rebuild test`, and if that works, `nixos-rebuild boot` to activate it in the boot loader.
+
+That's it so far - if anything goes wrong, you're on your own. (Sorry! It's experimental!)
