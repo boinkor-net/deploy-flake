@@ -28,14 +28,42 @@ What `deploy-flake` does that I think are advantages over `deploy-rs`:
 
 * Nicer story around running the activation process in the background: It uses `systemd-run` to spawn the activation as a systemd unit, which will allow the control process to get disconnected at any point in time & the deployment can continue.
 
+# Setting up
+
+To run deploy-flake with your flake definition, add the following inputs into your flake.nix:
+
+```nix
+inputs = {
+  # ...
+  deploy-flake = {
+    url = "github:antifuchs/deploy-flake";
+
+    # The following are optional, but probably a good idea if you have these inputs:
+    # inputs.nixpkgs.follows = "nixpkgs";
+    # inputs.naersk.follows = "naersk";
+  };
+}
+```
+
+and the following to the outputs for your platform (you'll probably want to use [flake-utils](https://github.com/numtide/flake-utils) for those clauses):
+
+```nix
+outputs =
+  { #...
+  , deploy-flake
+  }:
+  # ...
+  {
+    apps.deploy-flake = deploy-flake.apps.deploy-flake.${system};
+  }
+```
+
 # Usage
 
-Once you installed this binary on your path via `cargo install`, cd into your flake's source directory and run:
+Once set up in your flake.nix, you can invoke `deploy-flake` like this:
 
-`deploy-flake destination-host`
+```sh
+$ nix run ./#deploy-flake -- destination-host
+```
 
-(You can also use `--flake /path/to/flake/source/`).
-
-That will copy the flake to `destination-host` via SSH, then try to test the config with `nixos-rebuild test`, and if that works, `nixos-rebuild boot` to activate it in the boot loader.
-
-That's it so far - if anything goes wrong, you're on your own. (Sorry! It's experimental!)
+That will copy a snapshot of the flake onto the host `destination-host`, build & activate it and if that suceeds, set the configuration up to be booted.
