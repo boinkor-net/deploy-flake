@@ -50,7 +50,7 @@ impl NixOperatingSystem for Nixos {
         verb: super::Verb,
         flake: &crate::Flake,
     ) -> Result<(), anyhow::Error> {
-        let mut cmd = self.session.command("systemd-run");
+        let mut cmd = self.session.command("sudo");
         let flake_base_name = flake
             .resolved_path
             .file_name()
@@ -62,8 +62,11 @@ impl NixOperatingSystem for Nixos {
             .expect("Nix path must be utf-8 clean");
         let unit_name = format!("{}--{}", Self::verb_command(verb), flake_base_name);
 
-        cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
         cmd.args(&[
+            "systemd-run",
             "--working-directory=/tmp",
             "--service-type=oneshot",
             "--send-sighup",
