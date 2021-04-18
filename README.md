@@ -14,15 +14,13 @@ deploy-flake has several **shortcomings and TODOs** for now:
 
 * No timeouts (if system config applying hangs, it will never cancel & roll back).
 
-* You need to have configured polkit so it allows your ssh user to `systemd-run` without password prompts.
-
 I think there's a way to do all of these without sacrificing functionality. Only a matter of implementing them. (Contributions welcome! And I'll keep whittling away at this...)
 
 What `deploy-flake` does that I think are advantages over `deploy-rs`:
 
-* No need for remote build hosts if you're deploying nixos from a darwin system (the target system runs the build).
+* `deploy-flake` runs the build on the target system, eliminating the need for remote build servers if you are deploying nixos configs from a darwin system.
 
-* Only this single binary that you have to build run on your local machine, no cross-compilation for other platforms needed (yet, but any binaries that run remotely will in a different cargo project).
+* Only this single binary that you have to build run on your local machine, no cross-compilation for other platforms needed (yet, but any binaries that run remotely will live in a different cargo project and be possible to pin separately).
 
 * Better system activation story: The flake configuration is first applied via `nixos-rebuild test`, and only if that works, added to the boot entries via `nixos-rebuild boot`.
 
