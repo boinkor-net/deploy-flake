@@ -96,8 +96,11 @@ impl NixOperatingSystem for Nixos {
         cmd.args(&["systemctl", "is-system-running", "--wait"]);
         let health = cmd.output().await?;
         let health_data = String::from_utf8_lossy(&health.stdout);
+        let status = health_data.strip_suffix("\n");
         if !health.status.success() {
-            log::error!("System is not healthy. List of broken units follows:", {status: health_data.as_ref()});
+            log::error!("System is not healthy. List of broken units follows:", {
+                status: status
+            });
             self.session
                 .command("sudo")
                 .args(&["systemctl", "list-units", "--failed"])
@@ -106,7 +109,7 @@ impl NixOperatingSystem for Nixos {
                 .await?;
             anyhow::bail!("Can not deploy to an unhealthy system");
         }
-        log::info!("System is healthy", { status: health_data.as_ref() });
+        log::info!("System is healthy", { status: status });
         Ok(())
     }
 }
