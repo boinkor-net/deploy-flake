@@ -94,7 +94,6 @@ impl NixOperatingSystem for Nixos {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
         cmd.args(&["systemctl", "is-system-running", "--wait"]);
-        log::debug!("Checking system health");
         let health = cmd.output().await?;
         let health_data = String::from_utf8_lossy(&health.stdout);
         if !health.status.success() {
