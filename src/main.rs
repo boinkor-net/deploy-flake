@@ -41,7 +41,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let flake = Flake::from_path(&opts.flake)?;
     log::debug!("Flake metadata", { flake: flake.as_value() });
 
-    log::info!("Copying flake", {to: kv::Value::capture_debug(&opts.to)});
+    log::info!("Copying flake", {flake: flake.resolved_path(), to: kv::Value::capture_debug(&opts.to)});
     flake.copy_closure(&opts.to)?;
 
     log::debug!("Connecting", {to: kv::Value::capture_debug(&opts.to)});
