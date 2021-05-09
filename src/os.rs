@@ -26,5 +26,9 @@ pub trait NixOperatingSystem: ToValue {
     /// On NixOS, that is "nixos-rebuild".
     fn base_command<'a>(&'a self) -> Cow<'a, str>;
 
+    /// Checks if the system is able to be deployed to.
+    async fn preflight_check(&self) -> Result<(), anyhow::Error>;
+
+    /// Executes the given rebuild command (either "test" or "boot" at the moment.).
     async fn run_command(&self, verb: Verb, flake: &Flake) -> Result<(), anyhow::Error>;
 }

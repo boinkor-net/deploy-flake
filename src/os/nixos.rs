@@ -89,6 +89,27 @@ impl NixOperatingSystem for Nixos {
         }
         Ok(())
     }
+
+    async fn preflight_check(&self) -> Result<(), anyhow::Error> {
+        let mut cmd = self.session.command("sudo");
+        cmd.stdout(Stdio::piped());
+        cmd.args(&["systemctl", "is-system-running", "--wait"]);
+        log::debug!("Checking system health");
+        let health = cmd.output().await?;
+        let health_data = String::from_utf8_lossy(&health.stdout);
+        if !health.status.success() {
+            log::error!("System is not healthy. List of broken units follows:", {status: health_data.as_ref()});
+            self.session
+                .command("sudo")
+                .args(&["systemctl", "list-units", "--failed"])
+                .stdout(Stdio::inherit())
+                .status()
+                .await?;
+            anyhow::bail!("Can not deploy to an unhealthy system");
+        }
+        log::info!("System is healthy", { status: health_data.as_ref() });
+        Ok(())
+    }
 }
 
 impl fmt::Debug for Nixos {
