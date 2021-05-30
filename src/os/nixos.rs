@@ -157,9 +157,8 @@ impl NixOperatingSystem for Nixos {
     async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error> {
         let tmpdir = self.mkdtemp().await?;
         let mut cmd = self.session.command("sudo");
-        cmd.arg("-D")
+        cmd.args(&["env", "-C"])
             .arg(tmpdir.to_string_lossy())
-            .arg(self.base_command())
             .args(self.command_line(super::Verb::Build, flake))
             .arg("-L");
         cmd.stdout(Stdio::inherit())
