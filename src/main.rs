@@ -55,7 +55,7 @@ async fn main() -> Result<(), anyhow::Error> {
     log::info!("Building flake", {on: flavor.as_ref(), flake: flake.resolved_path()});
     flavor.build_flake(&flake).await?;
 
-    log::info!("Cheking system health", { on: flavor.as_ref() });
+    log::info!("Checking system health", { on: flavor.as_ref() });
     flavor.preflight_check().await?;
 
     log::info!("Testing config", { on: flavor.as_ref() });
