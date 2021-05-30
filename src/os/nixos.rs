@@ -6,7 +6,7 @@ use std::{
     ffi::OsStr,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
-    process::Stdio,
+    process::{Output, Stdio},
 };
 
 use ::log::kv::{self, ToValue};
@@ -17,6 +17,16 @@ use crate::NixOperatingSystem;
 pub struct Nixos {
     host: String,
     session: openssh::Session,
+}
+
+fn shell_output_to_path(output: Output) -> PathBuf {
+    let len = &output.stdout.len();
+    let last_byte = output.stdout[len - 1];
+    if last_byte == b'\n' {
+        PathBuf::from(OsStr::from_bytes(&output.stdout[..(len - 1)]))
+    } else {
+        PathBuf::from(OsStr::from_bytes(&output.stdout))
+    }
 }
 
 impl Nixos {
@@ -58,14 +68,18 @@ impl Nixos {
                 output.status
             ));
         }
-        Ok(PathBuf::from(OsStr::from_bytes(&output.stdout)))
+        Ok(shell_output_to_path(output))
     }
 
     async fn readlink(&self, result: &Path) -> Result<PathBuf, anyhow::Error> {
         let output = self
             .session
             .command("readlink")
-            .arg(result.to_str().ok_or(anyhow::anyhow!("Invalid UTF-8"))?)
+            .arg(
+                result
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8"))?,
+            )
             .stderr(Stdio::inherit())
             .output()
             .await?;
@@ -76,7 +90,7 @@ impl Nixos {
                 output.status
             ));
         }
-        Ok(PathBuf::from(OsStr::from_bytes(&output.stdout)))
+        Ok(shell_output_to_path(output))
     }
 }
 
@@ -95,10 +109,12 @@ impl NixOperatingSystem for Nixos {
         let flake_base_name = flake
             .resolved_path
             .file_name()
-            .ok_or(anyhow::anyhow!(
-                "Resolved path has a weird format: {:?}",
-                flake.resolved_path
-            ))?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Resolved path has a weird format: {:?}",
+                    flake.resolved_path
+                )
+            })?
             .to_str()
             .expect("Nix path must be utf-8 clean");
         let unit_name = format!("{}--{}", Self::verb_command(verb), flake_base_name);
