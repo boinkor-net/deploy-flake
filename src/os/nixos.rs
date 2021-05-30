@@ -1,11 +1,10 @@
 use kv_log_macro as log;
 
 use core::fmt;
+use serde::Deserialize;
 use std::{
     borrow::Cow,
-    ffi::OsStr,
-    os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Output, Stdio},
 };
 
@@ -19,13 +18,13 @@ pub struct Nixos {
     session: openssh::Session,
 }
 
-fn shell_output_to_path(output: Output) -> PathBuf {
+fn strip_shell_output(output: Output) -> String {
     let len = &output.stdout.len();
     let last_byte = output.stdout[len - 1];
     if last_byte == b'\n' {
-        PathBuf::from(OsStr::from_bytes(&output.stdout[..(len - 1)]))
+        String::from_utf8_lossy(&output.stdout[..(len - 1)]).to_string()
     } else {
-        PathBuf::from(OsStr::from_bytes(&output.stdout))
+        String::from_utf8_lossy(&output.stdout).to_string()
     }
 }
 
@@ -54,43 +53,20 @@ impl Nixos {
         }
     }
 
-    async fn mkdtemp(&self) -> Result<PathBuf, anyhow::Error> {
+    async fn hostname(&self) -> Result<String, anyhow::Error> {
         let output = self
             .session
-            .command("mktemp")
-            .args(&["-d"])
+            .command("hostname")
             .stderr(Stdio::inherit())
             .output()
             .await?;
         if !output.status.success() {
             return Err(anyhow::anyhow!(
-                "Could not create temporary dir: {:?}",
+                "Could not query for hostname: {:?}",
                 output.status
             ));
         }
-        Ok(shell_output_to_path(output))
-    }
-
-    async fn readlink(&self, result: &Path) -> Result<PathBuf, anyhow::Error> {
-        let output = self
-            .session
-            .command("readlink")
-            .arg(
-                result
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8"))?,
-            )
-            .stderr(Stdio::inherit())
-            .output()
-            .await?;
-        if !output.status.success() {
-            return Err(anyhow::anyhow!(
-                "Could not readlink {:?} dir: {:?}",
-                result,
-                output.status
-            ));
-        }
-        Ok(shell_output_to_path(output))
+        Ok(strip_shell_output(output))
     }
 }
 
@@ -171,20 +147,27 @@ impl NixOperatingSystem for Nixos {
     }
 
     async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error> {
-        let tmpdir = self.mkdtemp().await?;
-        let mut cmd = self.session.command("sudo");
-        cmd.args(&["env", "-C"])
-            .arg(tmpdir.to_string_lossy())
-            .args(self.command_line(super::Verb::Build, flake))
-            .arg("-L");
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
-        let status = cmd.status().await?;
-        if !status.success() {
+        let hostname = self.hostname().await?;
+
+        let mut cmd = self.session.command("env");
+        cmd.args(&["-C", "/tmp"])
+            .args(&["nix", "build", "-L", "--no-link", "--json"])
+            .arg(flake.nixos_system_config(&hostname));
+        cmd.stderr(Stdio::inherit()).stdin(Stdio::inherit());
+        let output = cmd.output().await?;
+        if !output.status.success() {
             anyhow::bail!("Could not build the flake.");
         }
-        Ok(self.readlink(&tmpdir.join("result")).await?)
+        let mut results: Vec<NixBuildResult> = serde_json::from_slice(&output.stdout)?;
+        if results.len() == 1 {
+            let result = results.pop().unwrap();
+            Ok(result.outputs.out)
+        } else {
+            Err(anyhow::anyhow!(
+                "Did not receive the required number of results: {:?}",
+                results
+            ))
+        }
     }
 }
 
@@ -198,4 +181,17 @@ impl ToValue for Nixos {
     fn to_value(&self) -> kv::Value<'_> {
         kv::Value::capture_debug(self)
     }
+}
+
+#[derive(PartialEq, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NixBuildResult {
+    drv_path: PathBuf,
+
+    outputs: NixOutput,
+}
+
+#[derive(PartialEq, Debug, Deserialize)]
+struct NixOutput {
+    out: PathBuf,
 }

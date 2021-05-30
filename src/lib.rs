@@ -40,6 +40,15 @@ impl Flake {
             .expect("Resolved flake path must be utf-8 clean")
     }
 
+    /// Returns a flake fragment to a NixOS system configuration for the given hostname.
+    pub fn nixos_system_config(&self, hostname: &str) -> String {
+        format!(
+            "{}#nixosConfigurations.{}.config.system.build.toplevel",
+            self.resolved_path(),
+            hostname
+        )
+    }
+
     /// Synchronously copies the store path closure to the destination host.
     pub fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
         let result = Command::new("nix-copy-closure")

@@ -52,7 +52,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .await
             .with_context(|| format!("Connecting to {:?}", &opts.to))?,
     );
-    log::info!("Building flake", {on: flavor.as_ref(), flake: flake.as_value()});
+    log::info!("Building flake", {on: flavor.as_ref(), flake: flake.resolved_path()});
     flavor.build_flake(&flake).await?;
 
     log::info!("Cheking system health", { on: flavor.as_ref() });
