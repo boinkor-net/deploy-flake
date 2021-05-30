@@ -24,7 +24,7 @@ pub trait NixOperatingSystem: ToValue {
     /// The base command that the operating system flavor uses.
     ///
     /// On NixOS, that is "nixos-rebuild".
-    fn base_command<'a>(&'a self) -> Cow<'a, str>;
+    fn base_command(&'_ self) -> Cow<'_, str>;
 
     /// Checks if the system is able to be deployed to.
     async fn preflight_check(&self) -> Result<(), anyhow::Error>;

@@ -48,7 +48,7 @@ fn log_format_with_color(
 }
 
 // Stolen from https://github.com/lrlna/femme/blob/94e5aa88cf13bf3dac5a56f51e6114aeec93928e/src/pretty.rs#L41:
-fn format_kv_pairs<'b>(mut out: &mut dyn io::Write, record: &log::Record) {
+fn format_kv_pairs(mut out: &mut dyn io::Write, record: &log::Record) {
     struct Visitor<'a> {
         stdout: &'a mut dyn io::Write,
     }

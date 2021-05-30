@@ -96,7 +96,7 @@ impl Nixos {
 
 #[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
-    fn base_command<'a>(&'a self) -> std::borrow::Cow<'a, str> {
+    fn base_command(&'_ self) -> std::borrow::Cow<'_, str> {
         Cow::from("nixos-rebuild")
     }
 
