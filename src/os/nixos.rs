@@ -1,7 +1,12 @@
 use kv_log_macro as log;
 
 use core::fmt;
-use std::{borrow::Cow, process::Stdio};
+use serde::Deserialize;
+use std::{
+    borrow::Cow,
+    path::PathBuf,
+    process::{Output, Stdio},
+};
 
 use ::log::kv::{self, ToValue};
 
@@ -11,6 +16,16 @@ use crate::NixOperatingSystem;
 pub struct Nixos {
     host: String,
     session: openssh::Session,
+}
+
+fn strip_shell_output(output: Output) -> String {
+    let len = &output.stdout.len();
+    let last_byte = output.stdout[len - 1];
+    if last_byte == b'\n' {
+        String::from_utf8_lossy(&output.stdout[..(len - 1)]).to_string()
+    } else {
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
 }
 
 impl Nixos {
@@ -37,11 +52,27 @@ impl Nixos {
             Boot => "boot",
         }
     }
+
+    async fn hostname(&self) -> Result<String, anyhow::Error> {
+        let output = self
+            .session
+            .command("hostname")
+            .stderr(Stdio::inherit())
+            .output()
+            .await?;
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(
+                "Could not query for hostname: {:?}",
+                output.status
+            ));
+        }
+        Ok(strip_shell_output(output))
+    }
 }
 
 #[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
-    fn base_command<'a>(&'a self) -> std::borrow::Cow<'a, str> {
+    fn base_command(&'_ self) -> std::borrow::Cow<'_, str> {
         Cow::from("nixos-rebuild")
     }
 
@@ -54,10 +85,12 @@ impl NixOperatingSystem for Nixos {
         let flake_base_name = flake
             .resolved_path
             .file_name()
-            .ok_or(anyhow::anyhow!(
-                "Resolved path has a weird format: {:?}",
-                flake.resolved_path
-            ))?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Resolved path has a weird format: {:?}",
+                    flake.resolved_path
+                )
+            })?
             .to_str()
             .expect("Nix path must be utf-8 clean");
         let unit_name = format!("{}--{}", Self::verb_command(verb), flake_base_name);
@@ -112,6 +145,30 @@ impl NixOperatingSystem for Nixos {
         log::info!("System is healthy", { status: status });
         Ok(())
     }
+
+    async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error> {
+        let hostname = self.hostname().await?;
+
+        let mut cmd = self.session.command("env");
+        cmd.args(&["-C", "/tmp"])
+            .args(&["nix", "build", "-L", "--no-link", "--json"])
+            .arg(flake.nixos_system_config(&hostname));
+        cmd.stderr(Stdio::inherit()).stdin(Stdio::inherit());
+        let output = cmd.output().await?;
+        if !output.status.success() {
+            anyhow::bail!("Could not build the flake.");
+        }
+        let mut results: Vec<NixBuildResult> = serde_json::from_slice(&output.stdout)?;
+        if results.len() == 1 {
+            let result = results.pop().unwrap();
+            Ok(result.outputs.out)
+        } else {
+            Err(anyhow::anyhow!(
+                "Did not receive the required number of results: {:?}",
+                results
+            ))
+        }
+    }
 }
 
 impl fmt::Debug for Nixos {
@@ -124,4 +181,17 @@ impl ToValue for Nixos {
     fn to_value(&self) -> kv::Value<'_> {
         kv::Value::capture_debug(self)
     }
+}
+
+#[derive(PartialEq, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NixBuildResult {
+    drv_path: PathBuf,
+
+    outputs: NixOutput,
+}
+
+#[derive(PartialEq, Debug, Deserialize)]
+struct NixOutput {
+    out: PathBuf,
 }
