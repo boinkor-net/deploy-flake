@@ -1,7 +1,13 @@
 use kv_log_macro as log;
 
 use core::fmt;
-use std::{borrow::Cow, process::Stdio};
+use std::{
+    borrow::Cow,
+    ffi::OsStr,
+    os::unix::ffi::OsStrExt,
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 
 use ::log::kv::{self, ToValue};
 
@@ -36,6 +42,41 @@ impl Nixos {
             Build => "build",
             Boot => "boot",
         }
+    }
+
+    async fn mkdtemp(&self) -> Result<PathBuf, anyhow::Error> {
+        let output = self
+            .session
+            .command("mktemp")
+            .args(&["-d"])
+            .stderr(Stdio::inherit())
+            .output()
+            .await?;
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(
+                "Could not create temporary dir: {:?}",
+                output.status
+            ));
+        }
+        Ok(PathBuf::from(OsStr::from_bytes(&output.stdout)))
+    }
+
+    async fn readlink(&self, result: &Path) -> Result<PathBuf, anyhow::Error> {
+        let output = self
+            .session
+            .command("readlink")
+            .arg(result.to_str().ok_or(anyhow::anyhow!("Invalid UTF-8"))?)
+            .stderr(Stdio::inherit())
+            .output()
+            .await?;
+        if !output.status.success() {
+            return Err(anyhow::anyhow!(
+                "Could not readlink {:?} dir: {:?}",
+                result,
+                output.status
+            ));
+        }
+        Ok(PathBuf::from(OsStr::from_bytes(&output.stdout)))
     }
 }
 
@@ -111,6 +152,24 @@ impl NixOperatingSystem for Nixos {
         }
         log::info!("System is healthy", { status: status });
         Ok(())
+    }
+
+    async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error> {
+        let tmpdir = self.mkdtemp().await?;
+        let mut cmd = self.session.command("sudo");
+        cmd.arg("-D")
+            .arg(tmpdir.to_string_lossy())
+            .arg(self.base_command())
+            .args(self.command_line(super::Verb::Build, flake))
+            .arg("-L");
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
+        let status = cmd.status().await?;
+        if !status.success() {
+            anyhow::bail!("Could not build the flake.");
+        }
+        Ok(self.readlink(&tmpdir.join("result")).await?)
     }
 }
 

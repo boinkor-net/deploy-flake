@@ -1,7 +1,7 @@
 mod nixos;
 
 use crate::Flake;
-use std::borrow::Cow;
+use std::{borrow::Cow, path::PathBuf};
 
 use log::kv::{self, ToValue};
 pub use nixos::Nixos;
@@ -31,4 +31,8 @@ pub trait NixOperatingSystem: ToValue {
 
     /// Executes the given rebuild command (either "test" or "boot" at the moment.).
     async fn run_command(&self, verb: Verb, flake: &Flake) -> Result<(), anyhow::Error>;
+
+    /// Builds a system configuration closure from the flake and
+    /// returns the path to the built closure.
+    async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error>;
 }
