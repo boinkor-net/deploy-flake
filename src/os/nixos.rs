@@ -66,47 +66,6 @@ impl Nixos {
         }
         Ok(strip_shell_output(output))
     }
-
-    async fn run_activation_command(
-        &self,
-        verb: super::Verb,
-        derivation: &Path,
-    ) -> Result<(), anyhow::Error> {
-        let mut cmd = self.session.command("sudo");
-        let flake_base_name = derivation
-            .file_name()
-            .ok_or_else(|| anyhow::anyhow!("Built path has a weird format: {:?}", derivation))?
-            .to_str()
-            .expect("Nix path must be utf-8 clean");
-        let unit_name = format!("{}--{}", Self::verb_command(verb), flake_base_name);
-
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
-        cmd.args(&[
-            "systemd-run",
-            "--working-directory=/tmp",
-            "--service-type=oneshot",
-            "--send-sighup",
-            "--unit",
-            &unit_name,
-            "--wait",
-            "--quiet",
-            "--pipe",
-            // Fix perl complaining about bad locale settings:
-            "--setenv=LC_ALL=C",
-        ]);
-        cmd.args(self.command_line(verb, derivation));
-        log::debug!("Running nixos-rebuild", {
-            verb: verb,
-            unit_name: unit_name.as_str(),
-        });
-        let status = cmd.status().await?;
-        if !status.success() {
-            return Err(anyhow::anyhow!("Invoking {:?} failed: {:?}", verb, status));
-        }
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -176,12 +135,60 @@ impl NixOperatingSystem for Nixos {
     }
 
     async fn test_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
-        self.run_activation_command(Verb::Test, derivation).await
+        let mut cmd = self.session.command("sudo");
+        let flake_base_name = derivation
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Built path has a weird format: {:?}", derivation))?
+            .to_str()
+            .expect("Nix path must be utf-8 clean");
+        let unit_name = format!("{}--{}", Self::verb_command(Verb::Test), flake_base_name);
+
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
+        cmd.args(&[
+            "systemd-run",
+            "--working-directory=/tmp",
+            "--service-type=oneshot",
+            "--send-sighup",
+            "--unit",
+            &unit_name,
+            "--wait",
+            "--quiet",
+            "--pipe",
+            // Fix perl complaining about bad locale settings:
+            "--setenv=LC_ALL=C",
+        ]);
+        cmd.args(self.command_line(Verb::Test, derivation));
+        log::debug!("Running nixos-rebuild test in background", {
+            unit_name: unit_name.as_str(),
+        });
+        let status = cmd.status().await?;
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "testing the system closure {:?} failed: {:?}",
+                derivation,
+                status
+            ));
+        }
+        Ok(())
     }
 
     async fn update_boot_for_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
-        // TODO: run this in the foreground, no need to use a backgrounded systemd unit at this point
-        self.run_activation_command(Verb::Boot, derivation).await
+        let mut cmd = self.session.command("sudo");
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
+        cmd.args(self.command_line(Verb::Boot, derivation))
+            .arg(derivation.to_string_lossy());
+        let status = cmd.status().await?;
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "Could not set {:?} up as the boot system",
+                derivation
+            ));
+        }
+        Ok(())
     }
 }
 
