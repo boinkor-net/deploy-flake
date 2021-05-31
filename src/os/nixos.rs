@@ -180,6 +180,7 @@ impl NixOperatingSystem for Nixos {
     }
 
     async fn update_boot_for_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
+        // TODO: run this in the foreground, no need to use a backgrounded systemd unit at this point
         self.run_activation_command(Verb::Boot, derivation).await
     }
 }
