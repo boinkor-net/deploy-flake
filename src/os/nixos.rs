@@ -108,7 +108,7 @@ impl NixOperatingSystem for Nixos {
             "--wait",
             "--quiet",
             "--pipe",
-            // Fix perl complaingin about bad locale settings:
+            // Fix perl complaining about bad locale settings:
             "--setenv=LC_ALL=C",
         ]);
         cmd.args(self.command_line(verb, flake));
