@@ -4,13 +4,13 @@ use core::fmt;
 use serde::Deserialize;
 use std::{
     borrow::Cow,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Output, Stdio},
 };
 
 use ::log::kv::{self, ToValue};
 
-use crate::NixOperatingSystem;
+use crate::{NixOperatingSystem, Verb};
 
 /// A nixos operating system instance.
 pub struct Nixos {
@@ -34,13 +34,11 @@ impl Nixos {
         Self { host, session }
     }
 
-    fn command_line<'a>(&'a self, verb: super::Verb, flake: &'a crate::Flake) -> Vec<Cow<'a, str>> {
+    fn command_line<'a>(&'a self, verb: super::Verb, derivation: &'a Path) -> Vec<Cow<'a, str>> {
+        let activate_script = derivation.join("bin/switch-to-configuration");
         vec![
-            self.base_command(),
+            Cow::from(activate_script.to_string_lossy().to_string()),
             Cow::from(Self::verb_command(verb)),
-            Cow::from("--show-trace"),
-            Cow::from("--flake"),
-            Cow::from(flake.resolved_path()),
         ]
     }
 
@@ -68,29 +66,16 @@ impl Nixos {
         }
         Ok(strip_shell_output(output))
     }
-}
 
-#[async_trait::async_trait]
-impl NixOperatingSystem for Nixos {
-    fn base_command(&'_ self) -> std::borrow::Cow<'_, str> {
-        Cow::from("nixos-rebuild")
-    }
-
-    async fn run_command(
+    async fn run_activation_command(
         &self,
         verb: super::Verb,
-        flake: &crate::Flake,
+        derivation: &Path,
     ) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
-        let flake_base_name = flake
-            .resolved_path
+        let flake_base_name = derivation
             .file_name()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Resolved path has a weird format: {:?}",
-                    flake.resolved_path
-                )
-            })?
+            .ok_or_else(|| anyhow::anyhow!("Built path has a weird format: {:?}", derivation))?
             .to_str()
             .expect("Nix path must be utf-8 clean");
         let unit_name = format!("{}--{}", Self::verb_command(verb), flake_base_name);
@@ -111,7 +96,7 @@ impl NixOperatingSystem for Nixos {
             // Fix perl complaining about bad locale settings:
             "--setenv=LC_ALL=C",
         ]);
-        cmd.args(self.command_line(verb, flake));
+        cmd.args(self.command_line(verb, derivation));
         log::debug!("Running nixos-rebuild", {
             verb: verb,
             unit_name: unit_name.as_str(),
@@ -121,6 +106,13 @@ impl NixOperatingSystem for Nixos {
             return Err(anyhow::anyhow!("Invoking {:?} failed: {:?}", verb, status));
         }
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl NixOperatingSystem for Nixos {
+    fn base_command(&'_ self) -> std::borrow::Cow<'_, str> {
+        Cow::from("nixos-rebuild")
     }
 
     async fn preflight_check(&self) -> Result<(), anyhow::Error> {
@@ -168,6 +160,31 @@ impl NixOperatingSystem for Nixos {
                 results
             ))
         }
+    }
+
+    async fn set_as_current_generation(&self, derivation: &Path) -> Result<(), anyhow::Error> {
+        let mut cmd = self.session.command("sudo");
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
+        cmd.args(&["nix-env", "-p", "/nix/var/nix/profiles/system", "--set"])
+            .arg(derivation.to_string_lossy());
+        let status = cmd.status().await?;
+        if !status.success() {
+            return Err(anyhow::anyhow!(
+                "Could not set {:?} as the current generation",
+                derivation
+            ));
+        }
+        Ok(())
+    }
+
+    async fn test_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
+        self.run_activation_command(Verb::Test, derivation).await
+    }
+
+    async fn update_boot_for_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
+        self.run_activation_command(Verb::Boot, derivation).await
     }
 }
 
