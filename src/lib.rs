@@ -1,12 +1,14 @@
 mod nix;
 mod os;
+use kv_log_macro as log;
 
-use log::kv::Value;
+use ::log::kv::{self, Value};
 pub use os::{NixOperatingSystem, Verb};
 
 use anyhow::{anyhow, bail, Context};
 use os::Nixos;
 use std::{
+    fmt,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
@@ -62,6 +64,72 @@ impl Flake {
 
     pub fn as_value(&self) -> Value {
         Value::capture_debug(self)
+    }
+
+    pub async fn build(
+        self,
+        on: Box<dyn NixOperatingSystem>,
+    ) -> Result<SystemConfiguration, anyhow::Error> {
+        let path = on.build_flake(&self).await?;
+        Ok(SystemConfiguration {
+            source: self,
+            path,
+            system: on,
+        })
+    }
+}
+
+/// Represents a "built" system configuration on a system that is ready to be activated.
+pub struct SystemConfiguration {
+    source: Flake,
+    path: PathBuf,
+    system: Box<dyn NixOperatingSystem>,
+}
+
+impl fmt::Debug for SystemConfiguration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "<src:{:?}|built:{:?}>",
+            self.source.resolved_path(),
+            self.path
+        )
+    }
+}
+
+impl kv::ToValue for SystemConfiguration {
+    fn to_value(&self) -> kv::Value<'_> {
+        kv::Value::capture_debug(self)
+    }
+}
+
+impl SystemConfiguration {
+    pub async fn test_config(&self) -> Result<(), anyhow::Error> {
+        self.system.test_config(&self.path).await
+    }
+
+    pub async fn boot_config(&self) -> Result<(), anyhow::Error> {
+        log::debug!("Attempting to activate boot configuration (dry-run)", {
+            cfg: self
+        });
+        self.system
+            .update_boot_for_config(&self.path)
+            .await
+            .context("Trial run of boot activation failed. No cleanup necessary.")?;
+
+        log::debug!("Setting system profile", { cfg: self });
+        self.system
+            .set_as_current_generation(&self.path)
+            .await
+            .context("You may have to check the system profile generation to clean up.")?;
+
+        log::debug!("Activating real boot configuration", { cfg: self });
+        self.system.update_boot_for_config(&self.path).await
+            .context("Actually setting the boot configuration failed. To clean up, you'll have to reset the system profile.")
+    }
+
+    pub async fn preflight_check(&self) -> Result<(), anyhow::Error> {
+        self.system.preflight_check().await
     }
 }
 

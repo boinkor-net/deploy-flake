@@ -3,7 +3,7 @@ use kv_log_macro as log;
 use ::log::kv;
 use anyhow::Context;
 use clap::Clap;
-use deploy_flake::{Flake, Flavor, Verb};
+use deploy_flake::{Flake, Flavor};
 use openssh::{KnownHosts, Session};
 use std::path::PathBuf;
 
@@ -53,16 +53,16 @@ async fn main() -> Result<(), anyhow::Error> {
             .with_context(|| format!("Connecting to {:?}", &opts.to))?,
     );
     log::info!("Building flake", {on: flavor.as_ref(), flake: flake.resolved_path()});
-    flavor.build_flake(&flake).await?;
+    let built = flake.build(flavor).await?;
 
-    log::info!("Checking system health", { on: flavor.as_ref() });
-    flavor.preflight_check().await?;
+    log::info!("Checking system health", { cfg: &built });
+    built.preflight_check().await?;
 
-    log::info!("Testing config", { on: flavor.as_ref() });
-    flavor.run_command(Verb::Test, &flake).await?;
+    log::info!("Testing config", { cfg: &built });
+    built.test_config().await?;
     // TODO: rollbacks.
-    log::info!("Activating config", { on: flavor.as_ref() });
-    flavor.run_command(Verb::Boot, &flake).await?;
+    log::info!("Activating config", { cfg: &built });
+    built.boot_config().await?;
 
     Ok(())
 }

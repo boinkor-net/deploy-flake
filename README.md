@@ -22,9 +22,9 @@ What `deploy-flake` does that I think are advantages over `deploy-rs`:
 
 * Only this single binary that you have to build run on your local machine, no cross-compilation for other platforms needed (yet, but any binaries that run remotely will live in a different cargo project and be possible to pin separately).
 
-* Better system activation story: The flake configuration is first applied via `nixos-rebuild test`, and only if that works, added to the boot entries via `nixos-rebuild boot`.
+* Better system activation story: The flake configuration is first applied via `nixos-rebuild test`, and only if that works, added to the boot entries via the equivalent of `nixos-rebuild boot`.
 
-* Nicer story around running the activation process in the background: It uses `systemd-run` to spawn the activation as a systemd unit, which will allow the control process to get disconnected at any point in time & the deployment can continue.
+* Nicer story around running the test process in the background: It uses `systemd-run` to spawn the activation as a systemd unit, which will allow the control process to get disconnected at any point in time & the deployment can continue.
 
 # Setting up
 
