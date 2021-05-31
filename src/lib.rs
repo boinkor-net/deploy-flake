@@ -112,11 +112,20 @@ impl SystemConfiguration {
         log::debug!("Attempting to activate boot configuration (dry-run)", {
             cfg: self
         });
-        self.system.update_boot_for_config(&self.path).await?;
+        self.system
+            .update_boot_for_config(&self.path)
+            .await
+            .context("Trial run of boot activation failed. No cleanup necessary.")?;
+
         log::debug!("Setting system profile", { cfg: self });
-        self.system.set_as_current_generation(&self.path).await?;
+        self.system
+            .set_as_current_generation(&self.path)
+            .await
+            .context("You may have to check the system profile generation to clean up.")?;
+
         log::debug!("Activating real boot configuration", { cfg: self });
         self.system.update_boot_for_config(&self.path).await
+            .context("Actually setting the boot configuration failed. To clean up, you'll have to reset the system profile.")
     }
 
     pub async fn preflight_check(&self) -> Result<(), anyhow::Error> {
