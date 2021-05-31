@@ -1,9 +1,6 @@
 mod nixos;
 
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use log::kv::{self, ToValue};
 pub use nixos::Nixos;
@@ -23,11 +20,6 @@ impl ToValue for Verb {
 
 #[async_trait::async_trait]
 pub trait NixOperatingSystem: ToValue {
-    /// The base command that the operating system flavor uses.
-    ///
-    /// On NixOS, that is "nixos-rebuild".
-    fn base_command(&'_ self) -> Cow<'_, str>;
-
     /// Checks if the system is able to be deployed to.
     async fn preflight_check(&self) -> Result<(), anyhow::Error>;
 

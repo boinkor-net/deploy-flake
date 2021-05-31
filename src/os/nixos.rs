@@ -111,10 +111,6 @@ impl Nixos {
 
 #[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
-    fn base_command(&'_ self) -> std::borrow::Cow<'_, str> {
-        Cow::from("nixos-rebuild")
-    }
-
     async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
