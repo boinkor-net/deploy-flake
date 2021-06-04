@@ -96,11 +96,29 @@ impl NixOperatingSystem for Nixos {
     async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error> {
         let hostname = self.hostname().await?;
 
+        // We run this twice: Once to get progress to the user & see
+        // output; and the second time to get the actual derivation
+        // path, which thankfully happens fast because the build
+        // result will be cached already.
+        let build_args = &["nix", "build", "-L", "--no-link"];
         let mut cmd = self.session.command("env");
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
         cmd.args(&["-C", "/tmp"])
-            .args(&["nix", "build", "-L", "--no-link", "--json"])
+            .args(build_args)
             .arg(flake.nixos_system_config(&hostname));
+        let status = cmd.status().await?;
+        if !status.success() {
+            anyhow::bail!("Could not build the flake.");
+        }
+
+        let mut cmd = self.session.command("env");
         cmd.stderr(Stdio::inherit()).stdin(Stdio::inherit());
+        cmd.args(&["-C", "/tmp"])
+            .args(build_args)
+            .arg("--json")
+            .arg(flake.nixos_system_config(&hostname));
         let output = cmd.output().await?;
         if !output.status.success() {
             anyhow::bail!("Could not build the flake.");
