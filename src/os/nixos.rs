@@ -1,4 +1,6 @@
+use anyhow::Context;
 use kv_log_macro as log;
+use openssh::Command;
 
 use core::fmt;
 use serde::Deserialize;
@@ -66,6 +68,26 @@ impl Nixos {
         }
         Ok(strip_shell_output(output))
     }
+
+    async fn run_command<'s>(&self, mut cmd: Command<'s>) -> Result<(), anyhow::Error> {
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::inherit());
+
+        log::debug!("Running command", {
+            cmd: kv::Value::capture_display(&format!("{:?}", cmd)),
+        });
+        let status = cmd.status().await?;
+        log::debug!("Command finished", {
+            cmd: kv::Value::capture_display(&format!("{:?}", cmd)),
+            status: kv::Value::capture_debug(&status),
+        });
+
+        if !status.success() {
+            anyhow::bail!("Remote command {:?} failed with status {:?}", cmd, status);
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -102,16 +124,12 @@ impl NixOperatingSystem for Nixos {
         // result will be cached already.
         let build_args = &["nix", "build", "-L", "--no-link"];
         let mut cmd = self.session.command("env");
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
         cmd.args(&["-C", "/tmp"])
             .args(build_args)
             .arg(flake.nixos_system_config(&hostname));
-        let status = cmd.status().await?;
-        if !status.success() {
-            anyhow::bail!("Could not build the flake.");
-        }
+        self.run_command(cmd)
+            .await
+            .context("Could not build the flake")?;
 
         let mut cmd = self.session.command("env");
         cmd.stderr(Stdio::inherit()).stdin(Stdio::inherit());
@@ -142,13 +160,9 @@ impl NixOperatingSystem for Nixos {
             .stdin(Stdio::inherit());
         cmd.args(&["nix-env", "-p", "/nix/var/nix/profiles/system", "--set"])
             .arg(derivation.to_string_lossy());
-        let status = cmd.status().await?;
-        if !status.success() {
-            return Err(anyhow::anyhow!(
-                "Could not set {:?} as the current generation",
-                derivation
-            ));
-        }
+        self.run_command(cmd)
+            .await
+            .with_context(|| format!("Could not set {:?} as the current generation", derivation))?;
         Ok(())
     }
 
@@ -181,14 +195,9 @@ impl NixOperatingSystem for Nixos {
         log::debug!("Running nixos-rebuild test in background", {
             unit_name: unit_name.as_str(),
         });
-        let status = cmd.status().await?;
-        if !status.success() {
-            return Err(anyhow::anyhow!(
-                "testing the system closure {:?} failed: {:?}",
-                derivation,
-                status
-            ));
-        }
+        self.run_command(cmd)
+            .await
+            .with_context(|| format!("testing the system closure {:?} failed", derivation))?;
         Ok(())
     }
 
