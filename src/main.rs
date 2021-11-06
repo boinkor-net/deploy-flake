@@ -2,14 +2,14 @@ use kv_log_macro as log;
 
 use ::log::kv;
 use anyhow::Context;
-use clap::Clap;
+use clap::Parser;
 use deploy_flake::{Flake, Flavor};
 use openssh::{KnownHosts, Session};
 use std::path::PathBuf;
 
 mod logging;
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 #[clap(author = "Andreas Fuchs <asf@boinkor.net>")]
 struct Opts {
     /// The flake source code directory to deploy.
@@ -17,7 +17,7 @@ struct Opts {
     flake: PathBuf,
 
     /// The operating system flavor to deploy to.
-    #[clap(long, default_value)]
+    #[clap(long, default_value_t)]
     os_flavor: Flavor,
 
     /// The host that we deploy to
