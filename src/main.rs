@@ -22,6 +22,10 @@ struct Opts {
 
     /// The host that we deploy to
     to: String,
+
+    /// Name of the configuration to deploy. Defaults to the remote hostname.
+    #[clap(long)]
+    config_name: Option<String>,
 }
 
 impl Opts {
@@ -53,7 +57,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .with_context(|| format!("Connecting to {:?}", &opts.to))?,
     );
     log::info!("Building flake", {on: flavor.as_ref(), flake: flake.resolved_path()});
-    let built = flake.build(flavor).await?;
+    let built = flake.build(flavor, opts.config_name.as_deref()).await?;
 
     log::info!("Checking system health", { cfg: &built });
     built.preflight_check().await?;

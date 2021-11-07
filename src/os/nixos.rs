@@ -115,8 +115,15 @@ impl NixOperatingSystem for Nixos {
         Ok(())
     }
 
-    async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error> {
-        let hostname = self.hostname().await?;
+    async fn build_flake(
+        &self,
+        flake: &crate::Flake,
+        config_name: Option<&str>,
+    ) -> Result<(PathBuf, String), anyhow::Error> {
+        let hostname = match config_name {
+            None => self.hostname().await?,
+            Some(name) => name.to_owned(),
+        };
 
         // We run this twice: Once to get progress to the user & see
         // output; and the second time to get the actual derivation
@@ -144,7 +151,7 @@ impl NixOperatingSystem for Nixos {
         let mut results: Vec<NixBuildResult> = serde_json::from_slice(&output.stdout)?;
         if results.len() == 1 {
             let result = results.pop().unwrap();
-            Ok(result.outputs.out)
+            Ok((result.outputs.out, hostname))
         } else {
             Err(anyhow::anyhow!(
                 "Did not receive the required number of results: {:?}",

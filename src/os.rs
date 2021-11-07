@@ -24,8 +24,13 @@ pub trait NixOperatingSystem: ToValue {
     async fn preflight_check(&self) -> Result<(), anyhow::Error>;
 
     /// Builds a system configuration closure from the flake and
-    /// returns the path to the built closure.
-    async fn build_flake(&self, flake: &crate::Flake) -> Result<PathBuf, anyhow::Error>;
+    /// returns the path to the built closure and the name of the
+    /// system that it was built for.
+    async fn build_flake(
+        &self,
+        flake: &crate::Flake,
+        config_name: Option<&str>,
+    ) -> Result<(PathBuf, String), anyhow::Error>;
 
     /// Sets the built system as the current "system" profile
     /// generation, without activation.

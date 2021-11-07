@@ -69,12 +69,14 @@ impl Flake {
     pub async fn build(
         self,
         on: Box<dyn NixOperatingSystem>,
+        config_name: Option<&str>,
     ) -> Result<SystemConfiguration, anyhow::Error> {
-        let path = on.build_flake(&self).await?;
+        let (path, system_name) = on.build_flake(&self, config_name).await?;
         Ok(SystemConfiguration {
             source: self,
             path,
             system: on,
+            system_name,
         })
     }
 }
@@ -84,15 +86,17 @@ pub struct SystemConfiguration {
     source: Flake,
     path: PathBuf,
     system: Box<dyn NixOperatingSystem>,
+    system_name: String,
 }
 
 impl fmt::Debug for SystemConfiguration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "<src:{:?}|built:{:?}>",
+            "<src:{:?}|built:{:?}#{}>",
             self.source.resolved_path(),
-            self.path
+            self.path,
+            self.system_name
         )
     }
 }
