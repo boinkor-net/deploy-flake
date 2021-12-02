@@ -38,7 +38,6 @@ inputs = {
 
     # The following are optional, but probably a good idea if you have these inputs:
     # inputs.nixpkgs.follows = "nixpkgs";
-    # inputs.naersk.follows = "naersk";
   };
 }
 ```

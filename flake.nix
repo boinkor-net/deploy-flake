@@ -3,27 +3,27 @@
 
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
-    naersk.url = "github:nmattia/naersk";
   };
 
   outputs =
     { self
     , nixpkgs
     , flake-utils
-    , naersk
     , ...
     }:
     flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = nixpkgs.legacyPackages.${system};
-      naersk-lib = naersk.lib."${system}";
       nativeBuildInputs = [ pkgs.libiconv ];
     in
     rec {
       packages = {
-        deploy-flake = naersk-lib.buildPackage {
+        deploy-flake = pkgs.rustPlatform.buildRustPackage rec {
+          pname = "deploy-flake";
+          version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
           inherit nativeBuildInputs;
-          root = ./.;
+          src = ./.;
+          cargoLock.lockFile = ./Cargo.lock;
         };
       };
 
