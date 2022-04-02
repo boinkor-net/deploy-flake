@@ -1,33 +1,48 @@
 [package]
-edition = '2018'
-name = "deploy-flake"
-version = "0.0.1-dev"
 authors = ["Andreas Fuchs <asf@boinkor.net>"]
-license = "MIT"
-repository = "https://github.com/antifuchs/deploy-flake"
-readme = "README.md"
 description = "Deploy a nix flake to a remote system"
 documentation = "https://docs.rs/deploy-flake"
+edition = "2018"
+license = "MIT"
+name = "deploy-flake"
+readme = "README.md"
+repository = "https://github.com/antifuchs/deploy-flake"
+version = "0.0.1-dev"
+
+[metadata]
+[metadata.template_ci]
+[metadata.template_ci.clippy]
+allow_failure = false
+version = "stable"
+[badges]
+[badges.maintenance]
+status = "passively-maintained"
+
+[badges.travis-ci]
+branch = "master"
+repository = "antifuchs/deploy-flake"
 
 [[bin]]
 name = "deploy-flake"
 path = "src/main.rs"
 
-[badges]
-travis-ci = { repository = "antifuchs/deploy-flake", branch = "master" }
-maintenance = { status = "passively-maintained" }
-
-[package.metadata.template_ci.clippy]
-allow_failure = false
-version = "stable"
-
 [dependencies]
-clap = { version = "3.1.8", features = ["derive"] }
 anyhow = "1.0.56"
-serde_json = "1.0.79"
-serde = { version = "1.0.136", features = ["derive"] }
-openssh = "0.8.1"
-tokio = { version = "1.16.1", features = ["full"] }
 async-trait = "0.1.53"
+openssh = "0.8.1"
+serde_json = "1.0.79"
 tracing = "0.1.32"
 tracing-subscriber = "0.3.10"
+url = "*"
+
+[dependencies.clap]
+features = ["derive"]
+version = "3.1.8"
+
+[dependencies.serde]
+features = ["derive"]
+version = "1.0.136"
+
+[dependencies.tokio]
+features = ["full"]
+version = "1.16.1"

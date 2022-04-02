@@ -4,7 +4,42 @@ use anyhow::Context;
 use clap::Parser;
 use deploy_flake::{Flake, Flavor};
 use openssh::{KnownHosts, Session};
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
+use url::Url;
+
+#[derive(Debug)]
+struct Destination {
+    os_flavor: Flavor,
+    hostname: String,
+    config_name: Option<String>,
+}
+
+impl FromStr for Destination {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(url) = Url::parse(s) {
+            // we have a URL, let's see if it matches something we can deal with:
+            match (url.scheme(), url.host_str(), url.path()) {
+                (scheme, Some(hostname), path) if scheme == "nixos" => Ok(Destination {
+                    os_flavor: Flavor::Nixos,
+                    hostname: hostname.to_string(),
+                    config_name: path
+                        .strip_prefix('/')
+                        .filter(|path| path.len() != 0)
+                        .map(String::from),
+                }),
+                _ => anyhow::bail!("Unable to parse {s}"),
+            }
+        } else {
+            Ok(Destination {
+                os_flavor: Flavor::Nixos,
+                hostname: s.to_string(),
+                config_name: None,
+            })
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[clap(author = "Andreas Fuchs <asf@boinkor.net>")]
@@ -13,16 +48,9 @@ struct Opts {
     #[clap(long, default_value = ".")]
     flake: PathBuf,
 
-    /// The operating system flavor to deploy to.
-    #[clap(long, default_value_t)]
-    os_flavor: Flavor,
-
-    /// The host that we deploy to
-    to: String,
-
-    /// Name of the configuration to deploy. Defaults to the remote hostname.
-    #[clap(long)]
-    config_name: Option<String>,
+    /// The destinations that we deploy to
+    #[clap(parse(try_from_str))]
+    to: Vec<Destination>,
 }
 
 #[tokio::main]
@@ -35,27 +63,31 @@ async fn main() -> Result<(), anyhow::Error> {
     let flake = Flake::from_path(&opts.flake)?;
     log::debug!(?flake, "Flake metadata");
 
-    log::info!(flake=flake.resolved_path(), host=?opts.to, "Copying");
-    flake.copy_closure(&opts.to)?;
+    for destination in opts.to {
+        log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
+        flake.copy_closure(&destination.hostname)?;
 
-    log::debug!(to=?opts.to, "Connecting");
-    let flavor = opts.os_flavor.on_connection(
-        &opts.to,
-        Session::connect(&opts.to, KnownHosts::Strict)
-            .await
-            .with_context(|| format!("Connecting to {:?}", &opts.to))?,
-    );
-    log::info!(flake=?flake.resolved_path(), host=?opts.to, "Building");
-    let built = flake.build(flavor, opts.config_name.as_deref()).await?;
+        log::debug!(to=?destination.hostname, "Connecting");
+        let flavor = destination.os_flavor.on_connection(
+            &destination.hostname,
+            Session::connect(&destination.hostname, KnownHosts::Strict)
+                .await
+                .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
+        );
+        log::info!(flake=?flake.resolved_path(), host=?destination.hostname, config=?destination.config_name, "Building");
+        let built = flake
+            .build(flavor, destination.config_name.as_deref())
+            .await?;
 
-    log::info!("Checking system health");
-    built.preflight_check().await?;
+        log::info!("Checking system health");
+        built.preflight_check().await?;
 
-    log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Testing");
-    built.test_config().await?;
-    // TODO: rollbacks, maybe?
-    log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Activating");
-    built.boot_config().await?;
+        log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Testing");
+        built.test_config().await?;
+        // TODO: rollbacks, maybe?
+        log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Activating");
+        built.boot_config().await?;
+    }
 
     Ok(())
 }

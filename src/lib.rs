@@ -66,7 +66,7 @@ impl Flake {
 
     #[instrument(level = "INFO", "Building flake", err)]
     pub async fn build(
-        self,
+        &self,
         on: Box<dyn NixOperatingSystem>,
         config_name: Option<&str>,
     ) -> Result<SystemConfiguration, anyhow::Error> {
