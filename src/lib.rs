@@ -111,7 +111,7 @@ impl SystemConfiguration {
             .context("Actually setting the boot configuration failed. To clean up, you'll have to reset the system profile.")
     }
 
-    #[instrument(skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
+    #[instrument(level="DEBUG", skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
     pub async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         self.system.preflight_check().await
     }

@@ -81,19 +81,19 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[instrument(err)]
+#[instrument(skip(flake, destination), fields(flake=?flake.resolved_path(), dest=?destination.hostname) err)]
 async fn deploy_to(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
     log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname)?;
 
-    log::debug!(to=?destination.hostname, "Connecting");
+    log::debug!("Connecting");
     let flavor = destination.os_flavor.on_connection(
         &destination.hostname,
         Session::connect(&destination.hostname, KnownHosts::Strict)
             .await
             .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
     );
-    log::info!(flake=?flake.resolved_path(), host=?destination.hostname, config=?destination.config_name, "Building");
+    log::info!(config=?destination.config_name, "Building");
     let built = flake
         .build(flavor, destination.config_name.as_deref())
         .await?;
@@ -101,10 +101,10 @@ async fn deploy_to(flake: Flake, destination: Destination) -> Result<(), anyhow:
     log::info!("Checking system health");
     built.preflight_check().await?;
 
-    log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Testing");
+    log::info!(configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
     built.test_config().await?;
     // TODO: rollbacks, maybe?
-    log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Activating");
+    log::info!(configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
     built.boot_config().await?;
     Ok(())
 }
