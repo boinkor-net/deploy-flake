@@ -28,7 +28,7 @@ serde_json = "1.0.64"
 serde = { version = "1.0.136", features = ["derive"] }
 openssh = "0.8.0"
 yansi = "0.5.0"
-flexi_logger = { version = "0.17.1" }
+flexi_logger = { version = "0.22.3" }
 log = {version = "0.4.14", features = ["kv_unstable"]}
 kv-log-macro = "1.0.7"
 tokio = { version = "1.5.0", features = ["full"] }
