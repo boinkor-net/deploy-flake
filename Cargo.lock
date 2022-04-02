@@ -255,9 +255,9 @@ checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 
 [[package]]
 name = "openssh"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97c2b27e5a865d02ade0d50eca7b1713bf4287083aa7459a5e8ff5b0e69975bc"
+checksum = "7a63cf640fd0e87026b72442a4e92dacbad9aaed69b42caa54729e46058898ce"
 dependencies = [
  "shell-escape",
  "tempfile",
