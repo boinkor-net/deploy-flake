@@ -26,6 +26,8 @@ What `deploy-flake` does that I think are advantages over `deploy-rs`:
 
 * Nicer story around running the test process in the background: It uses `systemd-run` to spawn the activation as a systemd unit, which will allow the control process to get disconnected at any point in time & the deployment can continue.
 
+* Parallelism: You can deploy one flake to multiple hosts in one invocation, in parallel.
+
 # Setting up
 
 To run deploy-flake with your flake definition, add the following inputs into your flake.nix:
@@ -61,10 +63,10 @@ outputs =
 Once set up in your flake.nix, you can invoke `deploy-flake` like this:
 
 ```sh
-$ nix run ./#deploy-flake -- destination-host
+$ nix run ./#deploy-flake -- destination-host1 nixos://destination-host2/webserver
 ```
 
-That will copy a snapshot of the flake onto the host `destination-host`, build & activate it and if that suceeds, set the configuration up to be booted.
+That will copy a snapshot of the flake onto the hosts `destination-host2` and `destination-host2`, build & activate it and if that suceeds, set the configuration up to be booted - all in parallel.
 
 ## Dealing with failure
 
