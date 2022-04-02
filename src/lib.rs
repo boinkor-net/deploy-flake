@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
+    sync::Arc,
 };
 
 /// All the important bits about a nix flake reference.
@@ -67,7 +68,7 @@ impl Flake {
     #[instrument(level = "INFO", "Building flake", err)]
     pub async fn build(
         &self,
-        on: Box<dyn NixOperatingSystem>,
+        on: Arc<dyn NixOperatingSystem + Send + Sync>,
         config_name: Option<&str>,
     ) -> Result<SystemConfiguration, anyhow::Error> {
         let (path, system_name) = on.build_flake(&self, config_name).await?;
@@ -82,7 +83,7 @@ impl Flake {
 /// Represents a "built" system configuration on a system that is ready to be activated.
 pub struct SystemConfiguration {
     path: PathBuf,
-    system: Box<dyn NixOperatingSystem>,
+    system: Arc<dyn NixOperatingSystem + Send + Sync>,
     system_name: String,
 }
 
@@ -116,7 +117,7 @@ impl SystemConfiguration {
     }
 
     /// Returns the system that the configuration resides on.
-    pub fn on(&self) -> &Box<dyn NixOperatingSystem> {
+    pub fn on(&self) -> &Arc<dyn NixOperatingSystem + Send + Sync> {
         &self.system
     }
 
@@ -171,9 +172,9 @@ impl Flavor {
         &self,
         host: &str,
         connection: openssh::Session,
-    ) -> Box<dyn NixOperatingSystem> {
+    ) -> Arc<dyn NixOperatingSystem + Send + Sync> {
         match self {
-            Flavor::Nixos => Box::new(Nixos::new(host.to_owned(), connection)),
+            Flavor::Nixos => Arc::new(Nixos::new(host.to_owned(), connection)),
         }
     }
 }

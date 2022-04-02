@@ -1,3 +1,4 @@
+use tokio::task;
 use tracing as log;
 
 use anyhow::Context;
@@ -63,31 +64,38 @@ async fn main() -> Result<(), anyhow::Error> {
     let flake = Flake::from_path(&opts.flake)?;
     log::debug!(?flake, "Flake metadata");
 
-    for destination in opts.to {
-        log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
-        flake.copy_closure(&destination.hostname)?;
+    futures::future::try_join_all(opts.to.into_iter().map(|destination| {
+        let flake = flake.clone();
+        task::spawn(async move { deploy_to(flake, destination).await })
+    }))
+    .await?;
 
-        log::debug!(to=?destination.hostname, "Connecting");
-        let flavor = destination.os_flavor.on_connection(
-            &destination.hostname,
-            Session::connect(&destination.hostname, KnownHosts::Strict)
-                .await
-                .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
-        );
-        log::info!(flake=?flake.resolved_path(), host=?destination.hostname, config=?destination.config_name, "Building");
-        let built = flake
-            .build(flavor, destination.config_name.as_deref())
-            .await?;
+    Ok(())
+}
 
-        log::info!("Checking system health");
-        built.preflight_check().await?;
+async fn deploy_to(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
+    log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
+    flake.copy_closure(&destination.hostname)?;
 
-        log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Testing");
-        built.test_config().await?;
-        // TODO: rollbacks, maybe?
-        log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Activating");
-        built.boot_config().await?;
-    }
+    log::debug!(to=?destination.hostname, "Connecting");
+    let flavor = destination.os_flavor.on_connection(
+        &destination.hostname,
+        Session::connect(&destination.hostname, KnownHosts::Strict)
+            .await
+            .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
+    );
+    log::info!(flake=?flake.resolved_path(), host=?destination.hostname, config=?destination.config_name, "Building");
+    let built = flake
+        .build(flavor, destination.config_name.as_deref())
+        .await?;
 
+    log::info!("Checking system health");
+    built.preflight_check().await?;
+
+    log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Testing");
+    built.test_config().await?;
+    // TODO: rollbacks, maybe?
+    log::info!(configuration=?built.configuration(), host=?built.on(), system_name=?built.for_system(), "Activating");
+    built.boot_config().await?;
     Ok(())
 }
