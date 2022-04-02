@@ -1,8 +1,10 @@
 mod nixos;
 
-use std::path::{Path, PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
-use log::kv::{self, ToValue};
 pub use nixos::Nixos;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -12,14 +14,8 @@ pub enum Verb {
     Boot,
 }
 
-impl ToValue for Verb {
-    fn to_value(&self) -> kv::Value {
-        kv::Value::capture_debug(self)
-    }
-}
-
 #[async_trait::async_trait]
-pub trait NixOperatingSystem: ToValue {
+pub trait NixOperatingSystem: fmt::Debug {
     /// Checks if the system is able to be deployed to.
     async fn preflight_check(&self) -> Result<(), anyhow::Error>;
 

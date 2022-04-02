@@ -1,8 +1,8 @@
+use tracing::instrument;
 mod nix;
 mod os;
-use kv_log_macro as log;
+use tracing as log;
 
-use ::log::kv::{self, Value};
 pub use os::{NixOperatingSystem, Verb};
 
 use anyhow::{anyhow, bail, Context};
@@ -26,7 +26,8 @@ pub struct Flake {
 
 impl Flake {
     /// Construct a new flake reference from a source path.
-    pub fn from_path<P: AsRef<Path>>(dir: P) -> Result<Self, anyhow::Error> {
+    #[instrument(level = "DEBUG", err)]
+    pub fn from_path<P: fmt::Debug + AsRef<Path>>(dir: P) -> Result<Self, anyhow::Error> {
         let dir = dir.as_ref().to_owned();
         let info = nix::FlakeInfo::from_path(&dir).with_context(|| format!("Flake {:?}", &dir))?;
         Ok(Flake {
@@ -52,6 +53,7 @@ impl Flake {
     }
 
     /// Synchronously copies the store path closure to the destination host.
+    #[instrument(err)]
     pub fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
         let result = Command::new("nix-copy-closure")
             .args(&[to, self.resolved_path()])
@@ -62,10 +64,7 @@ impl Flake {
         Ok(())
     }
 
-    pub fn as_value(&self) -> Value {
-        Value::capture_debug(self)
-    }
-
+    #[instrument(level = "INFO", "Building flake", err)]
     pub async fn build(
         self,
         on: Box<dyn NixOperatingSystem>,
@@ -73,7 +72,6 @@ impl Flake {
     ) -> Result<SystemConfiguration, anyhow::Error> {
         let (path, system_name) = on.build_flake(&self, config_name).await?;
         Ok(SystemConfiguration {
-            source: self,
             path,
             system: on,
             system_name,
@@ -83,57 +81,53 @@ impl Flake {
 
 /// Represents a "built" system configuration on a system that is ready to be activated.
 pub struct SystemConfiguration {
-    source: Flake,
     path: PathBuf,
     system: Box<dyn NixOperatingSystem>,
     system_name: String,
 }
 
-impl fmt::Debug for SystemConfiguration {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "<src:{:?}|built:{:?}#{}>",
-            self.source.resolved_path(),
-            self.path,
-            self.system_name
-        )
-    }
-}
-
-impl kv::ToValue for SystemConfiguration {
-    fn to_value(&self) -> kv::Value<'_> {
-        kv::Value::capture_debug(self)
-    }
-}
-
 impl SystemConfiguration {
+    #[instrument(skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
     pub async fn test_config(&self) -> Result<(), anyhow::Error> {
         self.system.test_config(&self.path).await
     }
 
+    #[instrument(skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
     pub async fn boot_config(&self) -> Result<(), anyhow::Error> {
-        log::debug!("Attempting to activate boot configuration (dry-run)", {
-            cfg: self
-        });
+        log::debug!("Attempting to activate boot configuration (dry-run)");
         self.system
             .update_boot_for_config(&self.path)
             .await
             .context("Trial run of boot activation failed. No cleanup necessary.")?;
 
-        log::debug!("Setting system profile", { cfg: self });
+        log::debug!("Setting system profile");
         self.system
             .set_as_current_generation(&self.path)
             .await
             .context("You may have to check the system profile generation to clean up.")?;
 
-        log::debug!("Activating real boot configuration", { cfg: self });
         self.system.update_boot_for_config(&self.path).await
             .context("Actually setting the boot configuration failed. To clean up, you'll have to reset the system profile.")
     }
 
+    #[instrument(skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
     pub async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         self.system.preflight_check().await
+    }
+
+    /// Returns the system that the configuration resides on.
+    pub fn on(&self) -> &Box<dyn NixOperatingSystem> {
+        &self.system
+    }
+
+    /// Returns the nix store path of the system that will be activated.
+    pub fn configuration(&self) -> &Path {
+        self.path.as_ref()
+    }
+
+    /// Returns the name of the system configuration.
+    pub fn for_system(&self) -> &str {
+        &self.system_name
     }
 }
 

@@ -1,6 +1,7 @@
 use anyhow::Context;
-use kv_log_macro as log;
 use openssh::Command;
+use tracing as log;
+use tracing::instrument;
 
 use core::fmt;
 use serde::Deserialize;
@@ -9,8 +10,6 @@ use std::{
     path::{Path, PathBuf},
     process::{Output, Stdio},
 };
-
-use ::log::kv::{self, ToValue};
 
 use crate::{NixOperatingSystem, Verb};
 
@@ -69,20 +68,15 @@ impl Nixos {
         Ok(strip_shell_output(output))
     }
 
+    #[instrument(level = "DEBUG", err)]
     async fn run_command<'s>(&self, mut cmd: Command<'s>) -> Result<(), anyhow::Error> {
         cmd.stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .stdin(Stdio::inherit());
 
-        log::debug!("Running command", {
-            cmd: kv::Value::capture_display(&format!("{:?}", cmd)),
-        });
+        log::debug!(command=?cmd, "Running");
         let status = cmd.status().await?;
-        log::debug!("Command finished", {
-            cmd: kv::Value::capture_display(&format!("{:?}", cmd)),
-            status: kv::Value::capture_debug(&status),
-        });
-
+        log::debug!(command=?cmd, ?status, "Finished");
         if !status.success() {
             anyhow::bail!("Remote command {:?} failed with status {:?}", cmd, status);
         }
@@ -92,6 +86,7 @@ impl Nixos {
 
 #[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
+    #[instrument(level = "DEBUG", err)]
     async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
@@ -100,9 +95,10 @@ impl NixOperatingSystem for Nixos {
         let health_data = String::from_utf8_lossy(&health.stdout);
         let status = health_data.strip_suffix("\n");
         if !health.status.success() {
-            log::error!("System is not healthy. List of broken units follows:", {
-                status: status
-            });
+            log::error!(
+                ?status,
+                "System is not healthy. List of broken units follows:"
+            );
             self.session
                 .command("sudo")
                 .args(&["systemctl", "list-units", "--failed"])
@@ -111,10 +107,11 @@ impl NixOperatingSystem for Nixos {
                 .await?;
             anyhow::bail!("Can not deploy to an unhealthy system");
         }
-        log::info!("System is healthy", { status: status });
+        log::info!(?status, "System is healthy");
         Ok(())
     }
 
+    #[instrument(level = "DEBUG", err)]
     async fn build_flake(
         &self,
         flake: &crate::Flake,
@@ -160,6 +157,7 @@ impl NixOperatingSystem for Nixos {
         }
     }
 
+    #[instrument(level = "DEBUG", err)]
     async fn set_as_current_generation(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::inherit())
@@ -173,6 +171,7 @@ impl NixOperatingSystem for Nixos {
         Ok(())
     }
 
+    #[instrument(level = "DEBUG", err)]
     async fn test_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         let flake_base_name = derivation
@@ -199,15 +198,14 @@ impl NixOperatingSystem for Nixos {
             "--setenv=LC_ALL=C",
         ]);
         cmd.args(self.command_line(Verb::Test, derivation));
-        log::debug!("Running nixos-rebuild test in background", {
-            unit_name: unit_name.as_str(),
-        });
+        log::debug!(?unit_name, "Running nixos-rebuild test in background");
         self.run_command(cmd)
             .await
             .with_context(|| format!("testing the system closure {:?} failed", derivation))?;
         Ok(())
     }
 
+    #[instrument(level = "DEBUG", err)]
     async fn update_boot_for_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::inherit())
@@ -228,13 +226,7 @@ impl NixOperatingSystem for Nixos {
 
 impl fmt::Debug for Nixos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "nixos://{}", self.host)
-    }
-}
-
-impl ToValue for Nixos {
-    fn to_value(&self) -> kv::Value<'_> {
-        kv::Value::capture_debug(self)
+        write!(f, "{}", self.host)
     }
 }
 
