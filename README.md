@@ -64,3 +64,25 @@ $ nix run ./#deploy-flake -- destination-host
 ```
 
 That will copy a snapshot of the flake onto the host `destination-host`, build & activate it and if that suceeds, set the configuration up to be booted.
+
+## Dealing with failure
+
+There are a few reasons a deploy might fail: I'm going to talk about the two most common/important ones.
+
+### `System is not healthy` before the deploy starts
+
+`deploy-flake` expects that the running system is in a `running` state (as indicated by `systemctl status`) before it starts applying the system configuration change. This is meant to protect you from the case where deploying to a slightly-broken system causes even more damage by attempting to start or restart units that were working before but fail to come up in the degraded system.
+
+When `deploy-flake` aborts with the message `System is not healthy.`, no changes ot the running system have occurred yet. You'll see a list of units that are currently in error states (and you can retrieve that same list by running `systemctl list-units --failed` on the remote system). Do whatever you need to do to get the units working again (restart them, stop them, use `systemctl reset-failed` or reboot the system), and then retry the deploy.
+
+### Failure to apply the new system configuration
+
+The more dangerous/annoying kind of failure occurs in the step that changes the running system (aka the `nixos-rebuild test` step): Units might fail to restart for whatever reason, and when they do, that could lock you out of the target system (e.g., if ssh or the network should fail to come back).
+
+The semi-good news even when you're locked out is that your "boot" system configuration hasn't changed, so if you reboot the target system, it will come up in a configuration that has (hopefully!) worked previously.
+
+In the less-terrible case, you aren't locked out but some unit failed to come up: You can get a list of those broken units and handle them accordingly (look at logs, restart them, etc).
+
+In order to continue and get a deployable system back, the list of failed units must be empty (see the previous section). Once that's the case you can retry the deploy, and hopefully the "test" step will succeed.
+
+Only when the "test" step succeeds does `deploy-flake` modify the boot configuration. Best of luck!

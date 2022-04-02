@@ -193,6 +193,7 @@ impl NixOperatingSystem for Nixos {
             &unit_name,
             "--wait",
             "--quiet",
+            "--collect",
             "--pipe",
             // Fix perl complaining about bad locale settings:
             "--setenv=LC_ALL=C",
