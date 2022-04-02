@@ -1,5 +1,6 @@
 use tokio::task;
 use tracing as log;
+use tracing::instrument;
 
 use anyhow::Context;
 use clap::Parser;
@@ -49,11 +50,18 @@ struct Opts {
     #[clap(long, default_value = ".")]
     flake: PathBuf,
 
-    /// The destinations that we deploy to
+    /// The destinations that will be deployed to.
+    ///
+    /// Each destination is either just a hostname, or a URL of the
+    /// form FLAVOR://HOSTNAME/[CONFIGURATION] where FLAVOR is
+    /// "nixos", and the optional CONFIGURATION specifies what
+    /// nixosConfiguration to build and deploy on the destination
+    /// (defaults to the hostname that the remote host reports).
     #[clap(parse(try_from_str))]
     to: Vec<Destination>,
 }
 
+#[instrument(level = "INFO", err)]
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
@@ -73,6 +81,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[instrument(level = "INFO", err)]
 async fn deploy_to(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
     log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname)?;
