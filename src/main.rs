@@ -61,7 +61,7 @@ struct Opts {
     to: Vec<Destination>,
 }
 
-#[instrument(level = "INFO", err)]
+#[instrument(err)]
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
@@ -81,7 +81,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[instrument(level = "INFO", err)]
+#[instrument(err)]
 async fn deploy_to(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
     log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname)?;

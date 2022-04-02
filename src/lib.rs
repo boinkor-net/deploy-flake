@@ -65,7 +65,7 @@ impl Flake {
         Ok(())
     }
 
-    #[instrument(level = "INFO", "Building flake", err)]
+    #[instrument(err)]
     pub async fn build(
         &self,
         on: Arc<dyn NixOperatingSystem + Send + Sync>,
