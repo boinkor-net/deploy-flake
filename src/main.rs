@@ -74,7 +74,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     futures::future::try_join_all(opts.to.into_iter().map(|destination| {
         let flake = flake.clone();
-        task::spawn(async move { deploy_to(flake, destination).await })
+        task::spawn(async move { deploy(flake, destination).await })
     }))
     .await?;
 
@@ -82,7 +82,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 #[instrument(skip(flake, destination), fields(flake=?flake.resolved_path(), dest=?destination.hostname) err)]
-async fn deploy_to(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
+async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
     log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname)?;
 
