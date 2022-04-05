@@ -66,7 +66,7 @@ Once set up in your flake.nix, you can invoke `deploy-flake` like this:
 $ nix run ./#deploy-flake -- destination-host1 nixos://destination-host2/webserver
 ```
 
-That will copy a snapshot of the flake onto the hosts `destination-host2` and `destination-host2`, build & activate it and if that suceeds, set the configuration up to be booted - all in parallel.
+That will copy a snapshot of the flake onto the hosts `destination-host1` and `destination-host2`, build & activate it and if that suceeds, set the configuration up to be booted - all in parallel.
 
 ## Dealing with failure
 
