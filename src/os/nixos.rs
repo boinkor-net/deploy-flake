@@ -1,5 +1,5 @@
 use anyhow::Context;
-use openssh::Command;
+use openssh::{Command, Stdio};
 use tracing as log;
 use tracing::instrument;
 
@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
-    process::{Output, Stdio},
+    process::Output,
 };
 
 use crate::{NixOperatingSystem, Verb};
