@@ -93,7 +93,7 @@ impl NixOperatingSystem for Nixos {
         cmd.args(&["systemctl", "is-system-running", "--wait"]);
         let health = cmd.output().await?;
         let health_data = String::from_utf8_lossy(&health.stdout);
-        let status = health_data.strip_suffix("\n");
+        let status = health_data.strip_suffix('\n');
         if !health.status.success() {
             log::error!(
                 ?status,

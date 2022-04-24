@@ -28,7 +28,7 @@ impl FromStr for Destination {
                     hostname: hostname.to_string(),
                     config_name: path
                         .strip_prefix('/')
-                        .filter(|path| path.len() != 0)
+                        .filter(|path| !path.is_empty())
                         .map(String::from),
                 }),
                 _ => anyhow::bail!("Unable to parse {s}"),

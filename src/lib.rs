@@ -71,7 +71,7 @@ impl Flake {
         on: Arc<dyn NixOperatingSystem + Send + Sync>,
         config_name: Option<&str>,
     ) -> Result<SystemConfiguration, anyhow::Error> {
-        let (path, system_name) = on.build_flake(&self, config_name).await?;
+        let (path, system_name) = on.build_flake(self, config_name).await?;
         Ok(SystemConfiguration {
             path,
             system: on,
