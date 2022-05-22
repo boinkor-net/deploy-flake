@@ -400,9 +400,9 @@ checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
 
 [[package]]
 name = "openssh"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "566e6cbfdad73f80b787b143cf3b6711375a627a54c53bb7ae129545d3d9e20d"
+checksum = "be17a41987b5f3491e81ca52502dfd2d650a2a7fcb56c174d133037f62f2d3a0"
 dependencies = [
  "dirs",
  "io-lifetimes",
@@ -410,6 +410,7 @@ dependencies = [
  "once_cell",
  "shell-escape",
  "tempfile",
+ "thiserror",
  "tokio",
  "tokio-pipe",
 ]
