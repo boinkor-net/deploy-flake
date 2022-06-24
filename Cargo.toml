@@ -22,7 +22,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.57"
-async-trait = "0.1.53"
+async-trait = "0.1.56"
 futures = "*"
 openssh = "0.9.3"
 serde_json = "1.0.81"
@@ -40,7 +40,7 @@ version = "1.0.137"
 
 [dependencies.tokio]
 features = ["full"]
-version = "1.18.2"
+version = "1.19.2"
 
 [metadata]
 [metadata.template_ci]
