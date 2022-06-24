@@ -9,7 +9,7 @@ use openssh::{KnownHosts, Session};
 use std::{path::PathBuf, str::FromStr};
 use url::Url;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Destination {
     os_flavor: Flavor,
     hostname: String,
@@ -57,7 +57,7 @@ struct Opts {
     /// "nixos", and the optional CONFIGURATION specifies what
     /// nixosConfiguration to build and deploy on the destination
     /// (defaults to the hostname that the remote host reports).
-    #[clap(parse(try_from_str))]
+    #[clap(value_parser)]
     to: Vec<Destination>,
 }
 
