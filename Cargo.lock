@@ -400,9 +400,9 @@ checksum = "7709cef83f0c1f58f666e746a08b21e0085f7440fa6a29cc194d68aac97a4225"
 
 [[package]]
 name = "openssh"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f948f0989d9b084a173ad8a6c59f335290f1f782a9db435735363206c97944d2"
+checksum = "c1c8efc4b48c72db9b7b1cb9c46822202c3082c2502a82ab2a48f1e29e34fc57"
 dependencies = [
  "dirs",
  "io-lifetimes",
