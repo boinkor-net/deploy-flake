@@ -16,7 +16,7 @@ use std::{
 };
 
 /// All the important bits about a nix flake reference.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Flake {
     /// The path that the flake source code lives in.
     dir: PathBuf,
@@ -133,7 +133,7 @@ impl SystemConfiguration {
 }
 
 /// The kind of operating system we deploy to
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Flavor {
     /// NixOS, the default.
     Nixos,
