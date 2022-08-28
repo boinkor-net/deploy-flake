@@ -32,11 +32,11 @@ url = "*"
 
 [dependencies.clap]
 features = ["derive"]
-version = "3.2.15"
+version = "3.2.17"
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.140"
+version = "1.0.144"
 
 [dependencies.tokio]
 features = ["full"]
