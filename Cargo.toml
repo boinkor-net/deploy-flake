@@ -32,7 +32,7 @@ url = "*"
 
 [dependencies.clap]
 features = ["derive"]
-version = "3.2.22"
+version = "4.0.4"
 
 [dependencies.serde]
 features = ["derive"]
@@ -40,7 +40,7 @@ version = "1.0.144"
 
 [dependencies.tokio]
 features = ["full"]
-version = "1.21.1"
+version = "1.21.2"
 
 [metadata]
 [metadata.template_ci]
