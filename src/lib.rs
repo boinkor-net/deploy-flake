@@ -57,7 +57,7 @@ impl Flake {
     #[instrument(err)]
     pub fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
         let result = Command::new("nix-copy-closure")
-            .args(&[to, self.resolved_path()])
+            .args([to, self.resolved_path()])
             .status()?;
         if !result.success() {
             bail!("nix-copy-closure failed");

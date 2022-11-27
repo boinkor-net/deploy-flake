@@ -90,7 +90,7 @@ impl NixOperatingSystem for Nixos {
     async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
-        cmd.args(&["systemctl", "is-system-running", "--wait"]);
+        cmd.args(["systemctl", "is-system-running", "--wait"]);
         let health = cmd.output().await?;
         let health_data = String::from_utf8_lossy(&health.stdout);
         let status = health_data.strip_suffix('\n');
@@ -101,7 +101,7 @@ impl NixOperatingSystem for Nixos {
             );
             self.session
                 .command("sudo")
-                .args(&["systemctl", "list-units", "--failed"])
+                .args(["systemctl", "list-units", "--failed"])
                 .stdout(Stdio::inherit())
                 .status()
                 .await?;
@@ -126,9 +126,9 @@ impl NixOperatingSystem for Nixos {
         // output; and the second time to get the actual derivation
         // path, which thankfully happens fast because the build
         // result will be cached already.
-        let build_args = &["nix", "build", "-L", "--no-link"];
+        let build_args = ["nix", "build", "-L", "--no-link"];
         let mut cmd = self.session.command("env");
-        cmd.args(&["-C", "/tmp"])
+        cmd.args(["-C", "/tmp"])
             .args(build_args)
             .arg(flake.nixos_system_config(&hostname));
         self.run_command(cmd)
@@ -137,7 +137,7 @@ impl NixOperatingSystem for Nixos {
 
         let mut cmd = self.session.command("env");
         cmd.stderr(Stdio::inherit()).stdin(Stdio::inherit());
-        cmd.args(&["-C", "/tmp"])
+        cmd.args(["-C", "/tmp"])
             .args(build_args)
             .arg("--json")
             .arg(flake.nixos_system_config(&hostname));
@@ -163,7 +163,7 @@ impl NixOperatingSystem for Nixos {
         cmd.stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .stdin(Stdio::inherit());
-        cmd.args(&["nix-env", "-p", "/nix/var/nix/profiles/system", "--set"])
+        cmd.args(["nix-env", "-p", "/nix/var/nix/profiles/system", "--set"])
             .arg(derivation.to_string_lossy());
         self.run_command(cmd)
             .await
@@ -184,7 +184,7 @@ impl NixOperatingSystem for Nixos {
         cmd.stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .stdin(Stdio::inherit());
-        cmd.args(&[
+        cmd.args([
             "systemd-run",
             "--working-directory=/tmp",
             "--service-type=oneshot",
