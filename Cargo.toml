@@ -22,7 +22,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.66"
-async-trait = "0.1.57"
+async-trait = "0.1.58"
 futures = "*"
 openssh = "0.9.7"
 serde_json = "1.0.89"
