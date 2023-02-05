@@ -17,7 +17,7 @@ jobs:
       matrix:
         rust_toolchain: [nightly, stable]
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v3.3.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust_toolchain }}
@@ -33,7 +33,7 @@ jobs:
   flake_build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v3.3.0
       - uses: cachix/install-nix-action@v18
       - run: nix build --no-link .#deploy-flake
       - run: nix flake check
@@ -50,7 +50,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v3.3.0
       - name: "cargo fmt"
         uses: actions-rs/cargo@v1.0.3
         with:
@@ -60,7 +60,7 @@ jobs:
   cargo_deny:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v3.3.0
       - name: "cargo deny"
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
@@ -69,7 +69,7 @@ jobs:
   cargo_clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v3.3.0
       - name: "cargo clippy"
         uses: actions-rs/clippy-check@v1
         with:
@@ -81,7 +81,7 @@ jobs:
     if: github.event_name == 'pull_request'
     needs: test
     steps:
-      - uses: actions/checkout@v3.1.0
+      - uses: actions/checkout@v3.3.0
       - name: "cargo bench"
         uses: actions-rs/cargo@v1.0.3
         with:
