@@ -22,9 +22,9 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.66"
-async-trait = "0.1.58"
+async-trait = "0.1.64"
 futures = "*"
-openssh = "0.9.8"
+openssh = "0.9.9"
 serde_json = "1.0.89"
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
@@ -36,7 +36,7 @@ version = "4.0.27"
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.147"
+version = "1.0.152"
 
 [dependencies.tokio]
 features = ["full"]
