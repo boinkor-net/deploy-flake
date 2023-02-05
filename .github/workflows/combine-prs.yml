@@ -13,9 +13,9 @@ on:
         required: true
         default: true
       combineBranchName:
-        description: "Name of the branch to combine PRs into"
+        description: "Name of the branch from which to submit the combined PR"
         required: true
-        default: "master"
+        default: "combined-prs-branch"
       ignoreLabel:
         description: "Exclude PRs with this label"
         required: true
