@@ -167,7 +167,7 @@ impl NixOperatingSystem for Nixos {
             .arg(derivation.to_string_lossy());
         self.run_command(cmd)
             .await
-            .with_context(|| format!("Could not set {:?} as the current generation", derivation))?;
+            .with_context(|| format!("Could not set {derivation:?} as the current generation"))?;
         Ok(())
     }
 
@@ -202,7 +202,7 @@ impl NixOperatingSystem for Nixos {
         log::debug!(?unit_name, "Running nixos-rebuild test in background");
         self.run_command(cmd)
             .await
-            .with_context(|| format!("testing the system closure {:?} failed", derivation))?;
+            .with_context(|| format!("testing the system closure {derivation:?} failed"))?;
         Ok(())
     }
 
