@@ -7,6 +7,7 @@ use clap::Parser;
 use deploy_flake::{Flake, Flavor};
 use openssh::{KnownHosts, Session};
 use std::{path::PathBuf, str::FromStr};
+use tracing_subscriber::prelude::*;
 use url::Url;
 
 #[derive(Debug, Clone)]
@@ -64,7 +65,11 @@ struct Opts {
 #[instrument(err)]
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tracing_subscriber::fmt::init();
+    let indicatif_layer = tracing_indicatif::IndicatifLayer::new().with_max_progress_bars(3, None);
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_fmt_writer()))
+        .with(indicatif_layer)
+        .init();
 
     let opts: Opts = Opts::parse();
     log::trace!(cmdline = ?opts);
