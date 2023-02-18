@@ -1,6 +1,6 @@
 use anyhow::Context;
 use openssh::{Command, Stdio};
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
 use tracing as log;
 use tracing::instrument;
 
@@ -26,7 +26,11 @@ async fn read_and_log_messages(
 ) -> Result<(), anyhow::Error> {
     let br = BufReader::new(r);
     let mut lines = br.lines();
-    while let Some(line) = lines.next_line().await? {
+    while let Some(line) = lines
+        .next_line()
+        .await
+        .context("Unable to read next line")?
+    {
         log::event!(log::Level::INFO, "{stream} {line}");
     }
     Ok(())
@@ -124,12 +128,18 @@ impl NixOperatingSystem for Nixos {
                 ?status,
                 "System is not healthy. List of broken units follows:"
             );
-            self.session
+            let output = self
+                .session
                 .command("sudo")
                 .args(["systemctl", "list-units", "--failed"])
-                .stdout(Stdio::inherit())
-                .status()
+                .stdout(Stdio::piped())
+                .output()
                 .await?;
+            log::event!(
+                log::Level::WARN,
+                "Failed units:\n{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
             anyhow::bail!("Can not deploy to an unhealthy system");
         }
         log::event!(log::Level::INFO, ?status, "System is healthy");
@@ -161,16 +171,30 @@ impl NixOperatingSystem for Nixos {
             .context("Could not build the flake")?;
 
         let mut cmd = self.session.command("env");
-        cmd.stderr(Stdio::inherit()).stdin(Stdio::inherit());
+        cmd.stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stdin(Stdio::inherit());
         cmd.args(["-C", "/tmp"])
             .args(build_args)
             .arg("--json")
             .arg(flake.nixos_system_config(&hostname));
-        let output = cmd.output().await?;
-        if !output.status.success() {
+        let mut child = cmd.spawn().await?;
+        let stderr_log = tokio::task::spawn(read_and_log_messages(
+            "E",
+            child.stderr().take().expect("should have stderr"),
+        ));
+        let mut child_stdout = child.stdout().take().expect("should have stdout");
+        let mut stdout = vec![];
+        let all = futures::join!(
+            child.wait(),
+            stderr_log,
+            child_stdout.read_to_end(&mut stdout)
+        );
+        let status = all.0?;
+        if !status.success() {
             anyhow::bail!("Could not build the flake.");
         }
-        let mut results: Vec<NixBuildResult> = serde_json::from_slice(&output.stdout)?;
+        let mut results: Vec<NixBuildResult> = serde_json::from_slice(&stdout)?;
         if results.len() == 1 {
             let result = results.pop().unwrap();
             Ok((result.outputs.out, hostname))
@@ -185,9 +209,6 @@ impl NixOperatingSystem for Nixos {
     #[instrument(level = "DEBUG", err)]
     async fn set_as_current_generation(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
         cmd.args(["nix-env", "-p", "/nix/var/nix/profiles/system", "--set"])
             .arg(derivation.to_string_lossy());
         self.run_command(cmd)
@@ -206,9 +227,6 @@ impl NixOperatingSystem for Nixos {
             .expect("Nix path must be utf-8 clean");
         let unit_name = format!("{}--{}", Self::verb_command(Verb::Test), flake_base_name);
 
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
         cmd.args([
             "systemd-run",
             "--working-directory=/tmp",
@@ -238,18 +256,11 @@ impl NixOperatingSystem for Nixos {
     #[instrument(level = "DEBUG", err)]
     async fn update_boot_for_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
         cmd.args(self.command_line(Verb::Boot, derivation))
             .arg(derivation.to_string_lossy());
-        let status = cmd.status().await?;
-        if !status.success() {
-            return Err(anyhow::anyhow!(
-                "Could not set {:?} up as the boot system",
-                derivation
-            ));
-        }
+        self.run_command(cmd)
+            .await
+            .with_context(|| format!("Could not set {:?} up as the boot system", derivation))?;
         Ok(())
     }
 }
