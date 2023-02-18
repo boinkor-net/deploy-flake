@@ -1,6 +1,7 @@
+use crate::read_and_log_messages;
 use anyhow::Context;
 use openssh::{Command, Stdio};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader};
+use tokio::io::AsyncReadExt;
 use tracing as log;
 use tracing::instrument;
 
@@ -18,22 +19,6 @@ use crate::{NixOperatingSystem, Verb};
 pub struct Nixos {
     host: String,
     session: openssh::Session,
-}
-
-async fn read_and_log_messages(
-    stream: &str,
-    r: impl AsyncRead + Unpin,
-) -> Result<(), anyhow::Error> {
-    let br = BufReader::new(r);
-    let mut lines = br.lines();
-    while let Some(line) = lines
-        .next_line()
-        .await
-        .context("Unable to read next line")?
-    {
-        log::event!(log::Level::INFO, "{stream} {line}");
-    }
-    Ok(())
 }
 
 fn strip_shell_output(output: Output) -> String {

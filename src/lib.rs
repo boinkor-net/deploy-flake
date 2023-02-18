@@ -1,3 +1,4 @@
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tracing::instrument;
 mod nix;
 mod os;
@@ -10,10 +11,10 @@ use os::Nixos;
 use std::{
     fmt,
     path::{Path, PathBuf},
-    process::Command,
     str::FromStr,
     sync::Arc,
 };
+use tokio::process::Command;
 
 /// All the important bits about a nix flake reference.
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -23,6 +24,23 @@ pub struct Flake {
 
     /// The path that the flake derivation lives in, via `nix info`
     resolved_path: PathBuf,
+}
+
+/// Read from an AsyncRead stream and log each line as INFO-level messages.
+pub(crate) async fn read_and_log_messages(
+    stream: &str,
+    r: impl AsyncRead + Unpin,
+) -> Result<(), anyhow::Error> {
+    let br = BufReader::new(r);
+    let mut lines = br.lines();
+    while let Some(line) = lines
+        .next_line()
+        .await
+        .context("Unable to read next line")?
+    {
+        log::event!(log::Level::INFO, "{stream} {line}");
+    }
+    Ok(())
 }
 
 impl Flake {
@@ -53,12 +71,22 @@ impl Flake {
         )
     }
 
-    /// Synchronously copies the store path closure to the destination host.
+    /// Copies the store path closure to the destination host.
     #[instrument(skip(self), err)]
-    pub fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
-        let result = Command::new("nix-copy-closure")
-            .args([to, self.resolved_path()])
-            .status()?;
+    pub async fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
+        let mut cmd = Command::new("nix-copy-closure");
+        cmd.args([to, self.resolved_path()]);
+        cmd.stderr(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn()?;
+        let stdout_read =
+            tokio::task::spawn(read_and_log_messages("O", child.stdout.take().unwrap()));
+        let stderr_read =
+            tokio::task::spawn(read_and_log_messages("E", child.stderr.take().unwrap()));
+
+        let outcomes = futures::join!(cmd.status(), stdout_read, stderr_read);
+        let result = outcomes.0?;
         if !result.success() {
             bail!("nix-copy-closure failed");
         }

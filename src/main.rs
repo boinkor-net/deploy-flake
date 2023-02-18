@@ -92,7 +92,7 @@ async fn main() -> Result<(), anyhow::Error> {
 #[instrument(skip(flake, destination), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
     log::event!(log::Level::INFO, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
-    flake.copy_closure(&destination.hostname)?;
+    flake.copy_closure(&destination.hostname).await?;
 
     log::debug!("Connecting");
     let flavor = destination.os_flavor.on_connection(
