@@ -75,6 +75,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .with(
             tracing_subscriber::fmt::layer()
                 .with_target(false)
+                .compact()
                 .with_writer(indicatif_layer.get_fmt_writer()),
         )
         .with(indicatif_layer)

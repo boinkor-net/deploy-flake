@@ -4,6 +4,7 @@ use openssh::{Command, Stdio};
 use tokio::io::AsyncReadExt;
 use tracing as log;
 use tracing::instrument;
+use tracing::Instrument;
 
 use core::fmt;
 use serde::Deserialize;
@@ -79,10 +80,14 @@ impl Nixos {
         log::event!(log::Level::DEBUG, command=?cmd, "Running");
         let mut child = cmd.spawn().await?;
         // Read stdout/stderr line-by-line and emit them as log messages:
-        let stdout_read =
-            tokio::task::spawn(read_and_log_messages("O", child.stdout().take().unwrap()));
-        let stderr_read =
-            tokio::task::spawn(read_and_log_messages("E", child.stderr().take().unwrap()));
+        let stdout_read = tokio::task::spawn(
+            read_and_log_messages("O", child.stdout().take().unwrap())
+                .instrument(log::Span::current()),
+        );
+        let stderr_read = tokio::task::spawn(
+            read_and_log_messages("E", child.stderr().take().unwrap())
+                .instrument(log::Span::current()),
+        );
         // Now, wait for it all to finish:
         let status = futures::join!(child.wait(), stdout_read, stderr_read);
         let exit_status = status.0?;
@@ -202,7 +207,7 @@ impl NixOperatingSystem for Nixos {
         Ok(())
     }
 
-    #[instrument(level = "DEBUG", err)]
+    #[instrument(level = "DEBUG", skip(self), fields(host=self.host), err)]
     async fn test_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         let flake_base_name = derivation

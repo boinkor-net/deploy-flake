@@ -1,3 +1,4 @@
+use log::Instrument;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tracing::instrument;
 mod nix;
@@ -80,10 +81,15 @@ impl Flake {
             .stdout(std::process::Stdio::piped());
 
         let mut child = cmd.spawn()?;
-        let stdout_read =
-            tokio::task::spawn(read_and_log_messages("O", child.stdout.take().unwrap()));
-        let stderr_read =
-            tokio::task::spawn(read_and_log_messages("E", child.stderr.take().unwrap()));
+        let stdout_read = tokio::task::spawn(
+            read_and_log_messages("O", child.stdout.take().unwrap())
+                .instrument(log::Span::current()),
+        );
+
+        let stderr_read = tokio::task::spawn(
+            read_and_log_messages("E", child.stderr.take().unwrap())
+                .instrument(log::Span::current()),
+        );
 
         let outcomes = futures::join!(cmd.status(), stdout_read, stderr_read);
         let result = outcomes.0?;
