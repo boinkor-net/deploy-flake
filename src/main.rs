@@ -86,7 +86,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[instrument(skip(flake, destination), fields(flake=?flake.resolved_path(), dest=?destination.hostname) err)]
+#[instrument(skip(flake, destination), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
     log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname)?;
