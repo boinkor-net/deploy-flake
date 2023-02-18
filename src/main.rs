@@ -72,7 +72,11 @@ async fn main() -> Result<(), anyhow::Error> {
         .from_env_lossy();
     tracing_subscriber::registry()
         .with(filter)
-        .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_fmt_writer()))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(false)
+                .with_writer(indicatif_layer.get_fmt_writer()),
+        )
         .with(indicatif_layer)
         .init();
 
@@ -93,7 +97,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 #[instrument(skip(flake, destination), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
-    log::event!(log::Level::INFO, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
+    log::event!(log::Level::DEBUG, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname).await?;
 
     log::debug!("Connecting");
@@ -103,18 +107,18 @@ async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Er
             .await
             .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
     );
-    log::event!(log::Level::INFO, config=?destination.config_name, "Building");
+    log::event!(log::Level::DEBUG, config=?destination.config_name, "Building");
     let built = flake
         .build(flavor, destination.config_name.as_deref())
         .await?;
 
-    log::event!(log::Level::INFO, "Checking system health");
+    log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
     built.preflight_check().await?;
 
-    log::event!(log::Level::INFO, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
+    log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
     built.test_config().await?;
     // TODO: rollbacks, maybe?
-    log::event!(log::Level::INFO, configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
+    log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
     built.boot_config().await?;
     Ok(())
 }

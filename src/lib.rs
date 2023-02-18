@@ -72,7 +72,7 @@ impl Flake {
     }
 
     /// Copies the store path closure to the destination host.
-    #[instrument(skip(self), err)]
+    #[instrument(skip(self), fields(to), err)]
     pub async fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
         let mut cmd = Command::new("nix-copy-closure");
         cmd.args([to, self.resolved_path()]);

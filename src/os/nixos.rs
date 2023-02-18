@@ -100,7 +100,7 @@ impl Nixos {
 
 #[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
-    #[instrument(level = "DEBUG", err)]
+    #[instrument(level = "INFO", err)]
     async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
@@ -127,7 +127,7 @@ impl NixOperatingSystem for Nixos {
             );
             anyhow::bail!("Can not deploy to an unhealthy system");
         }
-        log::event!(log::Level::INFO, ?status, "System is healthy");
+        log::event!(log::Level::DEBUG, ?status, "System is healthy");
         Ok(())
     }
 
