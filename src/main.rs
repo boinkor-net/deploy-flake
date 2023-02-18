@@ -67,7 +67,9 @@ struct Opts {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let indicatif_layer = tracing_indicatif::IndicatifLayer::new();
-    let filter = EnvFilter::from_default_env();
+    let filter = EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
     tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_fmt_writer()))
