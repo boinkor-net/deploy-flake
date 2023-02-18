@@ -1,5 +1,6 @@
 use anyhow::Context;
 use openssh::{Command, Stdio};
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tracing as log;
 use tracing::instrument;
 
@@ -17,6 +18,18 @@ use crate::{NixOperatingSystem, Verb};
 pub struct Nixos {
     host: String,
     session: openssh::Session,
+}
+
+async fn read_and_log_messages(
+    stream: &str,
+    r: impl AsyncRead + Unpin,
+) -> Result<(), anyhow::Error> {
+    let br = BufReader::new(r);
+    let mut lines = br.lines();
+    while let Some(line) = lines.next_line().await? {
+        log::event!(log::Level::INFO, "{stream} {line}");
+    }
+    Ok(())
 }
 
 fn strip_shell_output(output: Output) -> String {
@@ -70,15 +83,27 @@ impl Nixos {
 
     #[instrument(level = "DEBUG", err)]
     async fn run_command<'s>(&self, mut cmd: Command<'s>) -> Result<(), anyhow::Error> {
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+        cmd.stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .stdin(Stdio::inherit());
 
-        log::debug!(command=?cmd, "Running");
-        let status = cmd.status().await?;
-        log::debug!(command=?cmd, ?status, "Finished");
-        if !status.success() {
-            anyhow::bail!("Remote command {:?} failed with status {:?}", cmd, status);
+        log::event!(log::Level::DEBUG, command=?cmd, "Running");
+        let mut child = cmd.spawn().await?;
+        // Read stdout/stderr line-by-line and emit them as log messages:
+        let stdout_read =
+            tokio::task::spawn(read_and_log_messages("O", child.stdout().take().unwrap()));
+        let stderr_read =
+            tokio::task::spawn(read_and_log_messages("E", child.stderr().take().unwrap()));
+        // Now, wait for it all to finish:
+        let status = futures::join!(child.wait(), stdout_read, stderr_read);
+        let exit_status = status.0?;
+        log::event!(log::Level::DEBUG, command=?cmd, ?exit_status, "Finished");
+        if !exit_status.success() {
+            anyhow::bail!(
+                "Remote command {:?} failed with status {:?}",
+                cmd,
+                exit_status
+            );
         }
         Ok(())
     }
@@ -107,7 +132,7 @@ impl NixOperatingSystem for Nixos {
                 .await?;
             anyhow::bail!("Can not deploy to an unhealthy system");
         }
-        log::info!(?status, "System is healthy");
+        log::event!(log::Level::INFO, ?status, "System is healthy");
         Ok(())
     }
 
@@ -199,7 +224,11 @@ impl NixOperatingSystem for Nixos {
             "--setenv=LC_ALL=C",
         ]);
         cmd.args(self.command_line(Verb::Test, derivation));
-        log::debug!(?unit_name, "Running nixos-rebuild test in background");
+        log::event!(
+            log::Level::DEBUG,
+            ?unit_name,
+            "Running nixos-rebuild test in background"
+        );
         self.run_command(cmd)
             .await
             .with_context(|| format!("testing the system closure {derivation:?} failed"))?;

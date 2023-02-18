@@ -54,7 +54,7 @@ impl Flake {
     }
 
     /// Synchronously copies the store path closure to the destination host.
-    #[instrument(err)]
+    #[instrument(skip(self), err)]
     pub fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
         let result = Command::new("nix-copy-closure")
             .args([to, self.resolved_path()])
@@ -95,13 +95,16 @@ impl SystemConfiguration {
 
     #[instrument(skip(self) err)]
     pub async fn boot_config(&self) -> Result<(), anyhow::Error> {
-        log::debug!("Attempting to activate boot configuration (dry-run)");
+        log::event!(
+            log::Level::DEBUG,
+            "Attempting to activate boot configuration (dry-run)"
+        );
         self.system
             .update_boot_for_config(&self.path)
             .await
             .context("Trial run of boot activation failed. No cleanup necessary.")?;
 
-        log::debug!("Setting system profile");
+        log::event!(log::Level::DEBUG, "Setting system profile");
         self.system
             .set_as_current_generation(&self.path)
             .await

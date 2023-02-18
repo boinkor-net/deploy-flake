@@ -8,6 +8,7 @@ use deploy_flake::{Flake, Flavor};
 use openssh::{KnownHosts, Session};
 use std::{path::PathBuf, str::FromStr};
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 use url::Url;
 
 #[derive(Debug, Clone)]
@@ -65,8 +66,10 @@ struct Opts {
 #[instrument(err)]
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let indicatif_layer = tracing_indicatif::IndicatifLayer::new().with_max_progress_bars(3, None);
+    let indicatif_layer = tracing_indicatif::IndicatifLayer::new();
+    let filter = EnvFilter::from_default_env();
     tracing_subscriber::registry()
+        .with(filter)
         .with(tracing_subscriber::fmt::layer().with_writer(indicatif_layer.get_fmt_writer()))
         .with(indicatif_layer)
         .init();
@@ -88,7 +91,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 #[instrument(skip(flake, destination), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
-    log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
+    log::event!(log::Level::INFO, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname)?;
 
     log::debug!("Connecting");
@@ -98,18 +101,18 @@ async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Er
             .await
             .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
     );
-    log::info!(config=?destination.config_name, "Building");
+    log::event!(log::Level::INFO, config=?destination.config_name, "Building");
     let built = flake
         .build(flavor, destination.config_name.as_deref())
         .await?;
 
-    log::info!("Checking system health");
+    log::event!(log::Level::INFO, "Checking system health");
     built.preflight_check().await?;
 
-    log::info!(configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
+    log::event!(log::Level::INFO, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
     built.test_config().await?;
     // TODO: rollbacks, maybe?
-    log::info!(configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
+    log::event!(log::Level::INFO, configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
     built.boot_config().await?;
     Ok(())
 }
