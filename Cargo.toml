@@ -27,8 +27,9 @@ futures = "*"
 openssh = "0.9.9"
 serde_json = "1.0.92"
 tracing = "0.1.37"
-tracing-subscriber = "0.3.16"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 url = "*"
+tracing-indicatif = "0.2.2"
 
 [dependencies.clap]
 features = ["derive"]

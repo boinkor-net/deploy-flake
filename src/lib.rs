@@ -1,3 +1,5 @@
+use log::Instrument;
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tracing::instrument;
 mod nix;
 mod os;
@@ -10,10 +12,10 @@ use os::Nixos;
 use std::{
     fmt,
     path::{Path, PathBuf},
-    process::Command,
     str::FromStr,
     sync::Arc,
 };
+use tokio::process::Command;
 
 /// All the important bits about a nix flake reference.
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -23,6 +25,23 @@ pub struct Flake {
 
     /// The path that the flake derivation lives in, via `nix info`
     resolved_path: PathBuf,
+}
+
+/// Read from an AsyncRead stream and log each line as INFO-level messages.
+pub(crate) async fn read_and_log_messages(
+    stream: &str,
+    r: impl AsyncRead + Unpin,
+) -> Result<(), anyhow::Error> {
+    let br = BufReader::new(r);
+    let mut lines = br.lines();
+    while let Some(line) = lines
+        .next_line()
+        .await
+        .context("Unable to read next line")?
+    {
+        log::event!(log::Level::INFO, "{stream} {line}");
+    }
+    Ok(())
 }
 
 impl Flake {
@@ -53,12 +72,27 @@ impl Flake {
         )
     }
 
-    /// Synchronously copies the store path closure to the destination host.
-    #[instrument(err)]
-    pub fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
-        let result = Command::new("nix-copy-closure")
-            .args([to, self.resolved_path()])
-            .status()?;
+    /// Copies the store path closure to the destination host.
+    #[instrument(skip(self), fields(to), err)]
+    pub async fn copy_closure(&self, to: &str) -> Result<(), anyhow::Error> {
+        let mut cmd = Command::new("nix-copy-closure");
+        cmd.args([to, self.resolved_path()]);
+        cmd.stderr(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn()?;
+        let stdout_read = tokio::task::spawn(
+            read_and_log_messages("O", child.stdout.take().unwrap())
+                .instrument(log::Span::current()),
+        );
+
+        let stderr_read = tokio::task::spawn(
+            read_and_log_messages("E", child.stderr.take().unwrap())
+                .instrument(log::Span::current()),
+        );
+
+        let outcomes = futures::join!(cmd.status(), stdout_read, stderr_read);
+        let result = outcomes.0?;
         if !result.success() {
             bail!("nix-copy-closure failed");
         }
@@ -88,20 +122,23 @@ pub struct SystemConfiguration {
 }
 
 impl SystemConfiguration {
-    #[instrument(skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
+    #[instrument(skip(self) err)]
     pub async fn test_config(&self) -> Result<(), anyhow::Error> {
         self.system.test_config(&self.path).await
     }
 
-    #[instrument(skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
+    #[instrument(skip(self) err)]
     pub async fn boot_config(&self) -> Result<(), anyhow::Error> {
-        log::debug!("Attempting to activate boot configuration (dry-run)");
+        log::event!(
+            log::Level::DEBUG,
+            "Attempting to activate boot configuration (dry-run)"
+        );
         self.system
             .update_boot_for_config(&self.path)
             .await
             .context("Trial run of boot activation failed. No cleanup necessary.")?;
 
-        log::debug!("Setting system profile");
+        log::event!(log::Level::DEBUG, "Setting system profile");
         self.system
             .set_as_current_generation(&self.path)
             .await
@@ -111,7 +148,7 @@ impl SystemConfiguration {
             .context("Actually setting the boot configuration failed. To clean up, you'll have to reset the system profile.")
     }
 
-    #[instrument(level="DEBUG", skip(self), fields(on=?self.on(), configuration=?self.configuration()), err)]
+    #[instrument(level="DEBUG", skip(self) err)]
     pub async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         self.system.preflight_check().await
     }

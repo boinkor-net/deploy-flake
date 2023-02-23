@@ -1,7 +1,10 @@
+use crate::read_and_log_messages;
 use anyhow::Context;
 use openssh::{Command, Stdio};
+use tokio::io::AsyncReadExt;
 use tracing as log;
 use tracing::instrument;
+use tracing::Instrument;
 
 use core::fmt;
 use serde::Deserialize;
@@ -70,15 +73,31 @@ impl Nixos {
 
     #[instrument(level = "DEBUG", err)]
     async fn run_command<'s>(&self, mut cmd: Command<'s>) -> Result<(), anyhow::Error> {
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+        cmd.stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .stdin(Stdio::inherit());
 
-        log::debug!(command=?cmd, "Running");
-        let status = cmd.status().await?;
-        log::debug!(command=?cmd, ?status, "Finished");
-        if !status.success() {
-            anyhow::bail!("Remote command {:?} failed with status {:?}", cmd, status);
+        log::event!(log::Level::DEBUG, command=?cmd, "Running");
+        let mut child = cmd.spawn().await?;
+        // Read stdout/stderr line-by-line and emit them as log messages:
+        let stdout_read = tokio::task::spawn(
+            read_and_log_messages("O", child.stdout().take().unwrap())
+                .instrument(log::Span::current()),
+        );
+        let stderr_read = tokio::task::spawn(
+            read_and_log_messages("E", child.stderr().take().unwrap())
+                .instrument(log::Span::current()),
+        );
+        // Now, wait for it all to finish:
+        let status = futures::join!(child.wait(), stdout_read, stderr_read);
+        let exit_status = status.0?;
+        log::event!(log::Level::DEBUG, command=?cmd, ?exit_status, "Finished");
+        if !exit_status.success() {
+            anyhow::bail!(
+                "Remote command {:?} failed with status {:?}",
+                cmd,
+                exit_status
+            );
         }
         Ok(())
     }
@@ -86,7 +105,7 @@ impl Nixos {
 
 #[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
-    #[instrument(level = "DEBUG", err)]
+    #[instrument(level = "INFO", err)]
     async fn preflight_check(&self) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
@@ -99,15 +118,21 @@ impl NixOperatingSystem for Nixos {
                 ?status,
                 "System is not healthy. List of broken units follows:"
             );
-            self.session
+            let output = self
+                .session
                 .command("sudo")
                 .args(["systemctl", "list-units", "--failed"])
-                .stdout(Stdio::inherit())
-                .status()
+                .stdout(Stdio::piped())
+                .output()
                 .await?;
+            log::event!(
+                log::Level::WARN,
+                "Failed units:\n{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
             anyhow::bail!("Can not deploy to an unhealthy system");
         }
-        log::info!(?status, "System is healthy");
+        log::event!(log::Level::DEBUG, ?status, "System is healthy");
         Ok(())
     }
 
@@ -136,16 +161,30 @@ impl NixOperatingSystem for Nixos {
             .context("Could not build the flake")?;
 
         let mut cmd = self.session.command("env");
-        cmd.stderr(Stdio::inherit()).stdin(Stdio::inherit());
+        cmd.stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stdin(Stdio::inherit());
         cmd.args(["-C", "/tmp"])
             .args(build_args)
             .arg("--json")
             .arg(flake.nixos_system_config(&hostname));
-        let output = cmd.output().await?;
-        if !output.status.success() {
+        let mut child = cmd.spawn().await?;
+        let stderr_log = tokio::task::spawn(read_and_log_messages(
+            "E",
+            child.stderr().take().expect("should have stderr"),
+        ));
+        let mut child_stdout = child.stdout().take().expect("should have stdout");
+        let mut stdout = vec![];
+        let all = futures::join!(
+            child.wait(),
+            stderr_log,
+            child_stdout.read_to_end(&mut stdout)
+        );
+        let status = all.0?;
+        if !status.success() {
             anyhow::bail!("Could not build the flake.");
         }
-        let mut results: Vec<NixBuildResult> = serde_json::from_slice(&output.stdout)?;
+        let mut results: Vec<NixBuildResult> = serde_json::from_slice(&stdout)?;
         if results.len() == 1 {
             let result = results.pop().unwrap();
             Ok((result.outputs.out, hostname))
@@ -160,9 +199,6 @@ impl NixOperatingSystem for Nixos {
     #[instrument(level = "DEBUG", err)]
     async fn set_as_current_generation(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
         cmd.args(["nix-env", "-p", "/nix/var/nix/profiles/system", "--set"])
             .arg(derivation.to_string_lossy());
         self.run_command(cmd)
@@ -171,7 +207,7 @@ impl NixOperatingSystem for Nixos {
         Ok(())
     }
 
-    #[instrument(level = "DEBUG", err)]
+    #[instrument(level = "DEBUG", skip(self), fields(host=self.host), err)]
     async fn test_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         let flake_base_name = derivation
@@ -181,9 +217,6 @@ impl NixOperatingSystem for Nixos {
             .expect("Nix path must be utf-8 clean");
         let unit_name = format!("{}--{}", Self::verb_command(Verb::Test), flake_base_name);
 
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
         cmd.args([
             "systemd-run",
             "--working-directory=/tmp",
@@ -199,7 +232,11 @@ impl NixOperatingSystem for Nixos {
             "--setenv=LC_ALL=C",
         ]);
         cmd.args(self.command_line(Verb::Test, derivation));
-        log::debug!(?unit_name, "Running nixos-rebuild test in background");
+        log::event!(
+            log::Level::DEBUG,
+            ?unit_name,
+            "Running nixos-rebuild test in background"
+        );
         self.run_command(cmd)
             .await
             .with_context(|| format!("testing the system closure {derivation:?} failed"))?;
@@ -209,18 +246,11 @@ impl NixOperatingSystem for Nixos {
     #[instrument(level = "DEBUG", err)]
     async fn update_boot_for_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
-        cmd.stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .stdin(Stdio::inherit());
         cmd.args(self.command_line(Verb::Boot, derivation))
             .arg(derivation.to_string_lossy());
-        let status = cmd.status().await?;
-        if !status.success() {
-            return Err(anyhow::anyhow!(
-                "Could not set {:?} up as the boot system",
-                derivation
-            ));
-        }
+        self.run_command(cmd)
+            .await
+            .with_context(|| format!("Could not set {:?} up as the boot system", derivation))?;
         Ok(())
     }
 }

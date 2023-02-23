@@ -7,6 +7,8 @@ use clap::Parser;
 use deploy_flake::{Flake, Flavor};
 use openssh::{KnownHosts, Session};
 use std::{path::PathBuf, str::FromStr};
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 use url::Url;
 
 #[derive(Debug, Clone)]
@@ -64,7 +66,20 @@ struct Opts {
 #[instrument(err)]
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tracing_subscriber::fmt::init();
+    let indicatif_layer = tracing_indicatif::IndicatifLayer::new();
+    let filter = EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(false)
+                .compact()
+                .with_writer(indicatif_layer.get_fmt_writer()),
+        )
+        .with(indicatif_layer)
+        .init();
 
     let opts: Opts = Opts::parse();
     log::trace!(cmdline = ?opts);
@@ -81,10 +96,10 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[instrument(skip(flake, destination), fields(flake=?flake.resolved_path(), dest=?destination.hostname) err)]
+#[instrument(skip(flake, destination), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
-    log::info!(flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
-    flake.copy_closure(&destination.hostname)?;
+    log::event!(log::Level::DEBUG, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
+    flake.copy_closure(&destination.hostname).await?;
 
     log::debug!("Connecting");
     let flavor = destination.os_flavor.on_connection(
@@ -93,18 +108,18 @@ async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Er
             .await
             .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
     );
-    log::info!(config=?destination.config_name, "Building");
+    log::event!(log::Level::DEBUG, config=?destination.config_name, "Building");
     let built = flake
         .build(flavor, destination.config_name.as_deref())
         .await?;
 
-    log::info!("Checking system health");
+    log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
     built.preflight_check().await?;
 
-    log::info!(configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
+    log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
     built.test_config().await?;
     // TODO: rollbacks, maybe?
-    log::info!(configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
+    log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
     built.boot_config().await?;
     Ok(())
 }
