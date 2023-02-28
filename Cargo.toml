@@ -33,7 +33,7 @@ tracing-indicatif = "0.2.2"
 
 [dependencies.clap]
 features = ["derive"]
-version = "4.1.6"
+version = "4.1.7"
 
 [dependencies.serde]
 features = ["derive"]
