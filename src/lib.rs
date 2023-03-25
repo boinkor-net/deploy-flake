@@ -170,16 +170,11 @@ impl SystemConfiguration {
 }
 
 /// The kind of operating system we deploy to
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub enum Flavor {
     /// NixOS, the default.
+    #[default]
     Nixos,
-}
-
-impl Default for Flavor {
-    fn default() -> Self {
-        Flavor::Nixos
-    }
 }
 
 impl FromStr for Flavor {
