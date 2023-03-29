@@ -41,7 +41,7 @@ version = "1.0.159"
 
 [dependencies.tokio]
 features = ["full"]
-version = "1.26.0"
+version = "1.27.0"
 
 [metadata]
 [metadata.template_ci]
