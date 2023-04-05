@@ -45,6 +45,24 @@ impl FromStr for Destination {
     }
 }
 
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Eq, PartialEq)]
+enum Behavior {
+    Run,
+    Skip,
+}
+
+impl FromStr for Behavior {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "skip" => Ok(Behavior::Skip),
+            "run" => Ok(Behavior::Run),
+            _ => anyhow::bail!("Unknown behavior {s:?}"),
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[clap(author = "Andreas Fuchs <asf@boinkor.net>")]
 struct Opts {
@@ -61,6 +79,13 @@ struct Opts {
     /// (defaults to the hostname that the remote host reports).
     #[clap(value_parser)]
     to: Vec<Destination>,
+
+    /// Whether to run the "test" step, updating the system config
+    /// in-place before installing a new boot config. The default runs
+    /// the test step, use `--test=skip` to directly install the built
+    /// boot configuration.
+    #[clap(long, require_equals=true, value_name = "BEHAVIOR", default_missing_value = "run", default_value_t = Behavior::Run, value_enum)]
+    test: Behavior,
 }
 
 #[instrument(err)]
@@ -87,9 +112,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let flake = Flake::from_path(&opts.flake)?;
     log::debug!(?flake, "Flake metadata");
 
+    let do_test = opts.test;
+
     futures::future::try_join_all(opts.to.into_iter().map(|destination| {
         let flake = flake.clone();
-        task::spawn(async move { deploy(flake, destination).await })
+        task::spawn(async move { deploy(flake, destination, do_test).await })
     }))
     .await?;
 
@@ -97,7 +124,11 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 #[instrument(skip(flake, destination), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
-async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Error> {
+async fn deploy(
+    flake: Flake,
+    destination: Destination,
+    do_test: Behavior,
+) -> Result<(), anyhow::Error> {
     log::event!(log::Level::DEBUG, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname).await?;
 
@@ -116,8 +147,12 @@ async fn deploy(flake: Flake, destination: Destination) -> Result<(), anyhow::Er
     log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
     built.preflight_check().await?;
 
-    log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
-    built.test_config().await?;
+    if do_test == Behavior::Run {
+        log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
+        built.test_config().await?;
+    } else {
+        log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Skipping test");
+    }
     // TODO: rollbacks, maybe?
     log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
     built.boot_config().await?;
