@@ -71,7 +71,7 @@ impl Nixos {
         Ok(strip_shell_output(output))
     }
 
-    #[instrument(level = "DEBUG", err)]
+    #[instrument(level = "DEBUG", fields(cmd), err)]
     async fn run_command<'s>(&self, mut cmd: Command<'s>) -> Result<(), anyhow::Error> {
         cmd.stdout(Stdio::piped())
             .stderr(Stdio::piped())

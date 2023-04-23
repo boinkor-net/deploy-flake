@@ -17,6 +17,10 @@ use std::{
 };
 use tokio::process::Command;
 
+/// The tracing target that's used to log messages emitted by
+/// subprocesses.
+pub const SUBPROCESS_LOG_TARGET: &str = "subprocess_log";
+
 /// All the important bits about a nix flake reference.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Flake {
@@ -39,7 +43,11 @@ pub(crate) async fn read_and_log_messages(
         .await
         .context("Unable to read next line")?
     {
-        log::event!(log::Level::INFO, "{stream} {line}");
+        log::event!(
+            target: SUBPROCESS_LOG_TARGET,
+            log::Level::INFO,
+            "{stream} {line}"
+        );
     }
     Ok(())
 }
