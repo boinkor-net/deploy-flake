@@ -95,14 +95,26 @@ async fn main() -> Result<(), anyhow::Error> {
     let filter = EnvFilter::builder()
         .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
         .from_env_lossy();
+    let writer = indicatif_layer.get_stderr_writer();
+    let app_log_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .compact()
+        .with_writer(writer.clone())
+        .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
+            metadata.target() != deploy_flake::SUBPROCESS_LOG_TARGET
+        }));
+    let subprocess_log_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_level(false)
+        .compact()
+        .with_writer(writer.clone())
+        .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
+            metadata.target() == deploy_flake::SUBPROCESS_LOG_TARGET
+        }));
     tracing_subscriber::registry()
         .with(filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_target(false)
-                .compact()
-                .with_writer(indicatif_layer.get_stderr_writer()),
-        )
+        .with(app_log_layer)
+        .with(subprocess_log_layer)
         .with(indicatif_layer)
         .init();
 
