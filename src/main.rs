@@ -168,5 +168,6 @@ async fn deploy(
     // TODO: rollbacks, maybe?
     log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
     built.boot_config().await?;
+    log::event!(log::Level::INFO, configuration=?built.configuration(), system_name=?built.for_system(), "Successfully activated");
     Ok(())
 }
