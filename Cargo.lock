@@ -876,9 +876,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-indicatif"
-version = "0.3.0"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be4a5c90a233548de33c35a082c05b6fc91600d4f49765c31faf42b48f029ae8"
+checksum = "b434b6a3ba2f4a08b57b446e1436eccb09d7ef1607386cd73c0a2ffae9d856e7"
 dependencies = [
  "indicatif",
  "tracing",
