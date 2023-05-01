@@ -29,7 +29,7 @@ serde_json = "1.0.96"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 url = "*"
-tracing-indicatif = "0.3.0"
+tracing-indicatif = "0.3.4"
 
 [dependencies.clap]
 features = ["derive"]
