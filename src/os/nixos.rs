@@ -136,11 +136,12 @@ impl NixOperatingSystem for Nixos {
         Ok(())
     }
 
-    #[instrument(level = "DEBUG", err)]
+    #[instrument(level = "DEBUG", err, skip(build_cmdline))]
     async fn build_flake(
         &self,
         flake: &crate::Flake,
         config_name: Option<&str>,
+        build_cmdline: Vec<String>,
     ) -> Result<(PathBuf, String), anyhow::Error> {
         let hostname = match config_name {
             None => self.hostname().await?,
@@ -155,6 +156,7 @@ impl NixOperatingSystem for Nixos {
         let mut cmd = self.session.command("env");
         cmd.args(["-C", "/tmp"])
             .args(build_args)
+            .args(&build_cmdline)
             .arg(flake.nixos_system_config(&hostname));
         self.run_command(cmd)
             .await
@@ -166,6 +168,7 @@ impl NixOperatingSystem for Nixos {
             .stdin(Stdio::inherit());
         cmd.args(["-C", "/tmp"])
             .args(build_args)
+            .args(&build_cmdline)
             .arg("--json")
             .arg(flake.nixos_system_config(&hostname));
         let mut child = cmd.spawn().await?;
