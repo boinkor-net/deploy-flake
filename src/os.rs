@@ -26,6 +26,7 @@ pub trait NixOperatingSystem: fmt::Debug {
         &self,
         flake: &crate::Flake,
         config_name: Option<&str>,
+        build_cmdline: Vec<String>,
     ) -> Result<(PathBuf, String), anyhow::Error>;
 
     /// Sets the built system as the current "system" profile
