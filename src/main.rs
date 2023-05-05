@@ -86,6 +86,17 @@ struct Opts {
     /// boot configuration.
     #[clap(long, require_equals=true, value_name = "BEHAVIOR", default_missing_value = "run", default_value_t = Behavior::Run, value_enum)]
     test: Behavior,
+
+    /// Extra commandline arguments passed to the "nix build"
+    /// command. Defaults to the arguments needed to activate the
+    /// "flake" and "nix-command" features.
+    #[clap(
+        long,
+        value_delimiter = ' ',
+        value_parser,
+        default_value = "--extra-experimental-features nix-command --extra-experimental-features flakes"
+    )]
+    build_cmdline: Vec<String>,
 }
 
 #[instrument(err)]
@@ -125,21 +136,24 @@ async fn main() -> Result<(), anyhow::Error> {
     log::debug!(?flake, "Flake metadata");
 
     let do_test = opts.test;
+    let build_cmdline = opts.build_cmdline.clone();
 
     futures::future::try_join_all(opts.to.into_iter().map(|destination| {
         let flake = flake.clone();
-        task::spawn(async move { deploy(flake, destination, do_test).await })
+        let build_cmdline = build_cmdline.clone();
+        task::spawn(async move { deploy(flake, destination, do_test, build_cmdline).await })
     }))
     .await?;
 
     Ok(())
 }
 
-#[instrument(skip(flake, destination), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
+#[instrument(skip(flake, destination, do_test, build_cmdline), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(
     flake: Flake,
     destination: Destination,
     do_test: Behavior,
+    build_cmdline: Vec<String>,
 ) -> Result<(), anyhow::Error> {
     log::event!(log::Level::DEBUG, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
     flake.copy_closure(&destination.hostname).await?;
@@ -153,7 +167,7 @@ async fn deploy(
     );
     log::event!(log::Level::DEBUG, config=?destination.config_name, "Building");
     let built = flake
-        .build(flavor, destination.config_name.as_deref())
+        .build(flavor, destination.config_name.as_deref(), build_cmdline)
         .await?;
 
     log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
@@ -168,5 +182,6 @@ async fn deploy(
     // TODO: rollbacks, maybe?
     log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Activating");
     built.boot_config().await?;
+    log::event!(log::Level::INFO, configuration=?built.configuration(), system_name=?built.for_system(), "Successfully activated");
     Ok(())
 }
