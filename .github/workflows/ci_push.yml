@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3.5.2
-      - uses: cachix/install-nix-action@v20
+      - uses: cachix/install-nix-action@v21
       - run: nix build --no-link .#deploy-flake
       - run: nix flake check
 
