@@ -21,7 +21,7 @@ name = "deploy-flake"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.71"
+anyhow = "1.0.72"
 async-trait = "0.1.69"
 futures = "*"
 openssh = "0.9.9"
