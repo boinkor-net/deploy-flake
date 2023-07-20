@@ -37,7 +37,7 @@ version = "4.1.14"
 
 [dependencies.serde]
 features = ["derive"]
-version = "1.0.164"
+version = "1.0.173"
 
 [dependencies.tokio]
 features = ["full"]
