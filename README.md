@@ -36,7 +36,7 @@ To run deploy-flake with your flake definition, add the following inputs into yo
 inputs = {
   # ...
   deploy-flake = {
-    url = "github:antifuchs/deploy-flake";
+    url = "github:boinkor-net/deploy-flake";
 
     # The following are optional, but probably a good idea if you have these inputs:
     # inputs.nixpkgs.follows = "nixpkgs";
