@@ -80,6 +80,13 @@ struct Opts {
     #[clap(value_parser)]
     to: Vec<Destination>,
 
+    /// Whether to run the "preflight" check, where deploy-flake
+    /// checks if the target system is healthy. Running it is usually
+    /// a good idea to do, but when updating boot config on a broken
+    /// system, it is necessary to skip.
+    #[clap(long, require_equals=true, value_name = "BEHAVIOR", default_missing_value = "run", default_value_t = Behavior::Run, value_enum)]
+    preflight_check: Behavior,
+
     /// Whether to run the "test" step, updating the system config
     /// in-place before installing a new boot config. The default runs
     /// the test step, use `--test=skip` to directly install the built
@@ -135,13 +142,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let flake = Flake::from_path(&opts.flake)?;
     log::debug!(?flake, "Flake metadata");
 
+    let do_preflight = opts.preflight_check;
     let do_test = opts.test;
     let build_cmdline = opts.build_cmdline.clone();
 
     futures::future::try_join_all(opts.to.into_iter().map(|destination| {
         let flake = flake.clone();
         let build_cmdline = build_cmdline.clone();
-        task::spawn(async move { deploy(flake, destination, do_test, build_cmdline).await })
+        task::spawn(async move { deploy(flake, destination, do_preflight, do_test, build_cmdline).await })
     }))
     .await?;
 
@@ -152,6 +160,7 @@ async fn main() -> Result<(), anyhow::Error> {
 async fn deploy(
     flake: Flake,
     destination: Destination,
+    do_preflight: Behavior,
     do_test: Behavior,
     build_cmdline: Vec<String>,
 ) -> Result<(), anyhow::Error> {
@@ -170,8 +179,12 @@ async fn deploy(
         .build(flavor, destination.config_name.as_deref(), build_cmdline)
         .await?;
 
-    log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
-    built.preflight_check().await?;
+    if do_preflight == Behavior::Run {
+        log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
+        built.preflight_check().await?;
+    } else {
+        log::event!(log::Level::DEBUG, dest=?destination.hostname, "Skipping system health check");
+    }
 
     if do_test == Behavior::Run {
         log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
