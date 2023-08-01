@@ -149,7 +149,9 @@ async fn main() -> Result<(), anyhow::Error> {
     futures::future::try_join_all(opts.to.into_iter().map(|destination| {
         let flake = flake.clone();
         let build_cmdline = build_cmdline.clone();
-        task::spawn(async move { deploy(flake, destination, do_preflight, do_test, build_cmdline).await })
+        task::spawn(async move {
+            deploy(flake, destination, do_preflight, do_test, build_cmdline).await
+        })
     }))
     .await?;
 
