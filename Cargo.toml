@@ -21,11 +21,11 @@ name = "deploy-flake"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.72"
-async-trait = "0.1.72"
+anyhow = "1.0.75"
+async-trait = "0.1.73"
 futures = "*"
 openssh = "0.9.9"
-serde_json = "1.0.104"
+serde_json = "1.0.105"
 tracing = "0.1.38"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 url = "*"
@@ -41,7 +41,7 @@ version = "1.0.183"
 
 [dependencies.tokio]
 features = ["full"]
-version = "1.29.1"
+version = "1.32.0"
 
 [metadata]
 [metadata.template_ci]
