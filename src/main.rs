@@ -39,7 +39,7 @@ impl FromStr for Destination {
                             .filter(|path| !path.is_empty())
                             .map(String::from),
                     })
-                },
+                }
                 _ => anyhow::bail!("Unable to parse {s}"),
             }
         } else {
