@@ -26,7 +26,7 @@ impl FromStr for Destination {
             // we have a URL, let's see if it matches something we can deal with:
             match (url.scheme(), url.host_str(), url.path(), url.username()) {
                 (scheme, Some(host), path, username) if scheme == "nixos" => {
-                    let hostname = if username != "" {
+                    let hostname = if username.is_empty() {
                         host.to_string()
                     } else {
                         format!("{username}@{host}")
