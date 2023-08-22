@@ -24,15 +24,22 @@ impl FromStr for Destination {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(url) = Url::parse(s) {
             // we have a URL, let's see if it matches something we can deal with:
-            match (url.scheme(), url.host_str(), url.path()) {
-                (scheme, Some(hostname), path) if scheme == "nixos" => Ok(Destination {
-                    os_flavor: Flavor::Nixos,
-                    hostname: hostname.to_string(),
-                    config_name: path
-                        .strip_prefix('/')
-                        .filter(|path| !path.is_empty())
-                        .map(String::from),
-                }),
+            match (url.scheme(), url.host_str(), url.path(), url.username()) {
+                (scheme, Some(host), path, username) if scheme == "nixos" => {
+                    let hostname = if username != "" {
+                        host.to_string()
+                    } else {
+                        format!("{username}@{host}")
+                    };
+                    Ok(Destination {
+                        os_flavor: Flavor::Nixos,
+                        hostname,
+                        config_name: path
+                            .strip_prefix('/')
+                            .filter(|path| !path.is_empty())
+                            .map(String::from),
+                    })
+                },
                 _ => anyhow::bail!("Unable to parse {s}"),
             }
         } else {
