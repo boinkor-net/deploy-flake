@@ -6,13 +6,13 @@ jobs:
   flake_build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.5.3
+      - uses: actions/checkout@v3.6.0
       - uses: cachix/install-nix-action@v22
       - run: nix build --no-link path:.#deploy-flake
 
   flake_check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.5.3
+      - uses: actions/checkout@v3.6.0
       - uses: cachix/install-nix-action@v22
       - run: nix flake check path:.
