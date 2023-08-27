@@ -4,6 +4,10 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    gitignore = {
+      url = "github:hercules-ci/gitignore.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -11,6 +15,7 @@
     , nixpkgs
     , flake-utils
     , rust-overlay
+    , gitignore
     , ...
     }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -26,12 +31,13 @@
               rustc = pkgs.rust-bin.stable.latest.minimal;
               cargo = pkgs.rust-bin.stable.latest.minimal;
             };
+            inherit (gitignore.lib) gitignoreSource;
           in
           rustPlatform.buildRustPackage rec {
             pname = "deploy-flake";
             version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
             inherit nativeBuildInputs;
-            src = ./.;
+            src = gitignoreSource ./.;
             cargoLock.lockFile = ./Cargo.lock;
           };
       };
