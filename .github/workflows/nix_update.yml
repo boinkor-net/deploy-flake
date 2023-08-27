@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3.6.0
       - uses: cachix/install-nix-action@v22
-      - run: nix flake update
+      - run: nix flake update --commit-lock-file
       - run: nix flake check .
       - run: nix build --no-link .#
 
