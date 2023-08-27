@@ -10,28 +10,29 @@
     };
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , flake-utils
-    , rust-overlay
-    , gitignore
-    , ...
-    }:
-    flake-utils.lib.eachDefaultSystem (system:
-    let
-      pkgs = (import nixpkgs { inherit system; overlays = [ (import rust-overlay) ]; });
-      nativeBuildInputs = [ pkgs.libiconv ];
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    rust-overlay,
+    gitignore,
+    ...
+  }:
+    flake-utils.lib.eachDefaultSystem (system: let
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [(import rust-overlay)];
+      };
+      nativeBuildInputs = [pkgs.libiconv];
     in {
       packages = {
-        deploy-flake =
-          let
-            rustPlatform = pkgs.makeRustPlatform {
-              rustc = pkgs.rust-bin.stable.latest.minimal;
-              cargo = pkgs.rust-bin.stable.latest.minimal;
-            };
-            inherit (gitignore.lib) gitignoreSource;
-          in
+        deploy-flake = let
+          rustPlatform = pkgs.makeRustPlatform {
+            rustc = pkgs.rust-bin.stable.latest.minimal;
+            cargo = pkgs.rust-bin.stable.latest.minimal;
+          };
+          inherit (gitignore.lib) gitignoreSource;
+        in
           rustPlatform.buildRustPackage {
             pname = "deploy-flake";
             version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
@@ -42,6 +43,8 @@
 
         default = self.packages.${system}.deploy-flake;
       };
+
+      formatter = pkgs.alejandra;
 
       apps = {
         deploy-flake = {
