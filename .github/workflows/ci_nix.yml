@@ -19,6 +19,6 @@ jobs:
       matrix:
         derivation: [""]
     with:
-      root: ${{inputs.root_directory}}
+      root: "."
       installable: ${{matrix.derivation}}
 
