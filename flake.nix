@@ -22,8 +22,7 @@
     let
       pkgs = (import nixpkgs { inherit system; overlays = [ (import rust-overlay) ]; });
       nativeBuildInputs = [ pkgs.libiconv ];
-    in
-    rec {
+    in {
       packages = {
         deploy-flake =
           let
@@ -33,13 +32,15 @@
             };
             inherit (gitignore.lib) gitignoreSource;
           in
-          rustPlatform.buildRustPackage rec {
+          rustPlatform.buildRustPackage {
             pname = "deploy-flake";
             version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
             inherit nativeBuildInputs;
             src = gitignoreSource ./.;
             cargoLock.lockFile = ./Cargo.lock;
           };
+
+        default = self.packages.${system}.deploy-flake;
       };
 
       apps = {
@@ -47,6 +48,7 @@
           type = "app";
           program = "${self.packages."${system}".deploy-flake}/bin/deploy-flake";
         };
+        default = self.apps.${system}.deploy-flake;
       };
     });
 }
