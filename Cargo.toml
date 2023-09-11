@@ -25,7 +25,7 @@ anyhow = "1.0.75"
 async-trait = "0.1.73"
 futures = "*"
 openssh = "0.10.0"
-serde_json = "1.0.105"
+serde_json = "1.0.106"
 tracing = "0.1.38"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 url = "*"
