@@ -98,7 +98,7 @@ struct Opts {
     /// system being deployed, that checks whether the system closure
     /// is deployable. This program should be created with
     /// `system.extraSystemBuilderCmds` for NixOS.
-    #[clap(long, require_equals=true, value_name = "PROGRAM")]
+    #[clap(long, require_equals = true, value_name = "PROGRAM")]
     pre_activate_script: Option<PathBuf>,
 
     /// Whether to run the "test" step, updating the system config
@@ -166,7 +166,15 @@ async fn main() -> Result<(), anyhow::Error> {
         let build_cmdline = build_cmdline.clone();
         let pre_activate_script = pre_activate_script.clone();
         task::spawn(async move {
-            deploy(flake, destination, do_preflight, pre_activate_script, do_test, build_cmdline).await
+            deploy(
+                flake,
+                destination,
+                do_preflight,
+                pre_activate_script,
+                do_test,
+                build_cmdline,
+            )
+            .await
         })
     }))
     .await?;

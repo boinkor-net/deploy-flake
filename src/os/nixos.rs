@@ -137,14 +137,18 @@ impl NixOperatingSystem for Nixos {
     }
 
     #[instrument(level = "INFO", err)]
-    async fn preflight_check_closure(&self, derivation: &Path, script: &Path) -> Result<(), anyhow::Error> {
+    async fn preflight_check_closure(
+        &self,
+        derivation: &Path,
+        script: &Path,
+    ) -> Result<(), anyhow::Error> {
         let script_path = derivation.join(script);
 
         let mut cmd = self.session.command("sudo");
         cmd.arg(script_path.to_string_lossy());
         self.run_command(cmd)
             .await
-            .with_context(|| format!("System closure self-checks failed"))?;
+            .context("System closure self-checks failed")?;
         Ok(())
     }
 
