@@ -94,6 +94,13 @@ struct Opts {
     #[clap(long, require_equals=true, value_name = "BEHAVIOR", default_missing_value = "run", default_value_t = Behavior::Run, value_enum)]
     preflight_check: Behavior,
 
+    /// A program contained in the new system closure, run on the
+    /// system being deployed, that checks whether the system closure
+    /// is deployable. This program should be created with
+    /// `system.extraSystemBuilderCmds` for NixOS.
+    #[clap(long, require_equals=true, value_name = "PROGRAM")]
+    pre_activate_script: Option<PathBuf>,
+
     /// Whether to run the "test" step, updating the system config
     /// in-place before installing a new boot config. The default runs
     /// the test step, use `--test=skip` to directly install the built
@@ -151,13 +158,15 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let do_preflight = opts.preflight_check;
     let do_test = opts.test;
+    let pre_activate_script = opts.pre_activate_script;
     let build_cmdline = opts.build_cmdline.clone();
 
     futures::future::try_join_all(opts.to.into_iter().map(|destination| {
         let flake = flake.clone();
         let build_cmdline = build_cmdline.clone();
+        let pre_activate_script = pre_activate_script.clone();
         task::spawn(async move {
-            deploy(flake, destination, do_preflight, do_test, build_cmdline).await
+            deploy(flake, destination, do_preflight, pre_activate_script, do_test, build_cmdline).await
         })
     }))
     .await?;
@@ -165,11 +174,12 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[instrument(skip(flake, destination, do_test, build_cmdline), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
+#[instrument(skip(flake, destination, pre_activate_script, do_test, build_cmdline), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(
     flake: Flake,
     destination: Destination,
     do_preflight: Behavior,
+    pre_activate_script: Option<PathBuf>,
     do_test: Behavior,
     build_cmdline: Vec<String>,
 ) -> Result<(), anyhow::Error> {
@@ -190,9 +200,14 @@ async fn deploy(
 
     if do_preflight == Behavior::Run {
         log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
-        built.preflight_check().await?;
+        built.preflight_check_system().await?;
     } else {
         log::event!(log::Level::DEBUG, dest=?destination.hostname, "Skipping system health check");
+    }
+
+    if let Some(script) = pre_activate_script {
+        log::event!(log::Level::INFO, dest=?destination.hostname, script=?script, "Running pre-activation script");
+        built.preflight_check_closure(&script).await?;
     }
 
     if do_test == Behavior::Run {

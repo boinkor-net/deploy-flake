@@ -24,6 +24,8 @@ What `deploy-flake` does that I think are advantages over `deploy-rs`:
 
 * Better system activation story: The flake configuration is first applied via `nixos-rebuild test`, and only if that works, added to the boot entries via the equivalent of `nixos-rebuild boot`.
 
+* Optional system closure self-check script: If you use `system.extraSystemBuilderCmds` to write a self-test program into your system closure, `deploy-flake` can optionally invoke it via the `--pre-activate-script=relative-pathname` option and will not kick off a deploy on the machine if that program returns a non-0 status code.
+
 * Nicer story around running the test process in the background: It uses `systemd-run` to spawn the activation as a systemd unit, which will allow the control process to get disconnected at any point in time & the deployment can continue.
 
 * Parallelism: You can deploy one flake to multiple hosts in one invocation, in parallel.

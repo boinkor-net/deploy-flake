@@ -112,7 +112,7 @@ impl NixOperatingSystem for Nixos {
         cmd.args(["systemctl", "is-system-running", "--wait"]);
         let health = cmd.output().await?;
         let health_data = String::from_utf8_lossy(&health.stdout);
-        let status = health_data.strip_suffix('\n');
+        let status = health_data.strip_suffix('\n').unwrap_or("");
         if !health.status.success() {
             log::error!(
                 ?status,
@@ -133,6 +133,18 @@ impl NixOperatingSystem for Nixos {
             anyhow::bail!("Can not deploy to an unhealthy system");
         }
         log::event!(log::Level::DEBUG, ?status, "System is healthy");
+        Ok(())
+    }
+
+    #[instrument(level = "INFO", err)]
+    async fn preflight_check_closure(&self, derivation: &Path, script: &Path) -> Result<(), anyhow::Error> {
+        let script_path = derivation.join(script);
+
+        let mut cmd = self.session.command("sudo");
+        cmd.arg(script_path.to_string_lossy());
+        self.run_command(cmd)
+            .await
+            .with_context(|| format!("System closure self-checks failed"))?;
         Ok(())
     }
 

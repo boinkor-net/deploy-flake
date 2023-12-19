@@ -158,8 +158,13 @@ impl SystemConfiguration {
     }
 
     #[instrument(level="DEBUG", skip(self) err)]
-    pub async fn preflight_check(&self) -> Result<(), anyhow::Error> {
+    pub async fn preflight_check_system(&self) -> Result<(), anyhow::Error> {
         self.system.preflight_check_system().await
+    }
+
+    #[instrument(level="DEBUG", skip(self) err)]
+    pub async fn preflight_check_closure(&self, script: &Path) -> Result<(), anyhow::Error> {
+        self.system.preflight_check_closure(&self.path, script).await
     }
 
     /// Returns the system that the configuration resides on.
