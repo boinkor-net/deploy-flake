@@ -16,8 +16,8 @@ pub enum Verb {
 
 #[async_trait::async_trait]
 pub trait NixOperatingSystem: fmt::Debug {
-    /// Checks if the system is able to be deployed to.
-    async fn preflight_check(&self) -> Result<(), anyhow::Error>;
+    /// Checks if the target system is able to be deployed to.
+    async fn preflight_check_system(&self) -> Result<(), anyhow::Error>;
 
     /// Builds a system configuration closure from the flake and
     /// returns the path to the built closure and the name of the

@@ -106,7 +106,7 @@ impl Nixos {
 #[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
     #[instrument(level = "INFO", err)]
-    async fn preflight_check(&self) -> Result<(), anyhow::Error> {
+    async fn preflight_check_system(&self) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
         cmd.args(["systemctl", "is-system-running", "--wait"]);
