@@ -38,7 +38,11 @@ impl Nixos {
         Self { host, session }
     }
 
-    fn command_line<'a>(&'a self, verb: super::Verb, derivation: &'a Path) -> Vec<Cow<'a, str>> {
+    fn activation_command_line<'a>(
+        &'a self,
+        verb: super::Verb,
+        derivation: &'a Path,
+    ) -> Vec<Cow<'a, str>> {
         let activate_script = derivation.join("bin/switch-to-configuration");
         vec![
             Cow::from(activate_script.to_string_lossy().to_string()),
@@ -103,7 +107,6 @@ impl Nixos {
     }
 }
 
-#[async_trait::async_trait]
 impl NixOperatingSystem for Nixos {
     #[instrument(level = "INFO", err)]
     async fn preflight_check_system(&self) -> Result<(), anyhow::Error> {
@@ -168,7 +171,7 @@ impl NixOperatingSystem for Nixos {
         // output; and the second time to get the actual derivation
         // path, which thankfully happens fast because the build
         // result will be cached already.
-        let build_args = ["nix", "build", "-L", "--no-link"];
+        let build_args = ["nix", Self::verb_command(Verb::Build), "-L", "--no-link"];
         let mut cmd = self.session.command("env");
         cmd.args(["-C", "/tmp"])
             .args(build_args)
@@ -250,7 +253,7 @@ impl NixOperatingSystem for Nixos {
             // Fix perl complaining about bad locale settings:
             "--setenv=LC_ALL=C",
         ]);
-        cmd.args(self.command_line(Verb::Test, derivation));
+        cmd.args(self.activation_command_line(Verb::Test, derivation));
         log::event!(
             log::Level::DEBUG,
             ?unit_name,
@@ -265,7 +268,7 @@ impl NixOperatingSystem for Nixos {
     #[instrument(level = "DEBUG", err)]
     async fn update_boot_for_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
-        cmd.args(self.command_line(Verb::Boot, derivation))
+        cmd.args(self.activation_command_line(Verb::Boot, derivation))
             .arg(derivation.to_string_lossy());
         self.run_command(cmd)
             .await
