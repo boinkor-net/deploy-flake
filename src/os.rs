@@ -14,8 +14,7 @@ pub enum Verb {
     Boot,
 }
 
-#[async_trait::async_trait]
-pub trait NixOperatingSystem: fmt::Debug {
+pub(crate) trait NixOperatingSystem: fmt::Debug {
     /// Checks if the target system is able to be deployed to.
     async fn preflight_check_system(&self) -> Result<(), anyhow::Error>;
 

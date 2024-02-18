@@ -5,7 +5,7 @@ mod nix;
 mod os;
 use tracing as log;
 
-pub use os::{NixOperatingSystem, Verb};
+pub(crate) use os::{NixOperatingSystem, Verb};
 
 use anyhow::{anyhow, bail, Context};
 use os::Nixos;
@@ -110,7 +110,7 @@ impl Flake {
     #[instrument(err, skip(build_cmdline))]
     pub async fn build(
         &self,
-        on: Arc<dyn NixOperatingSystem + Send + Sync>,
+        on: Arc<Nixos>,
         config_name: Option<&str>,
         build_cmdline: Vec<String>,
     ) -> Result<SystemConfiguration, anyhow::Error> {
@@ -126,7 +126,7 @@ impl Flake {
 /// Represents a "built" system configuration on a system that is ready to be activated.
 pub struct SystemConfiguration {
     path: PathBuf,
-    system: Arc<dyn NixOperatingSystem + Send + Sync>,
+    system: Arc<Nixos>,
     system_name: String,
 }
 
@@ -170,7 +170,7 @@ impl SystemConfiguration {
     }
 
     /// Returns the system that the configuration resides on.
-    pub fn on(&self) -> &Arc<dyn NixOperatingSystem + Send + Sync> {
+    pub fn on(&self) -> &Arc<Nixos> {
         &self.system
     }
 
@@ -216,11 +216,7 @@ impl ToString for Flavor {
 }
 
 impl Flavor {
-    pub fn on_connection(
-        &self,
-        host: &str,
-        connection: openssh::Session,
-    ) -> Arc<dyn NixOperatingSystem + Send + Sync> {
+    pub fn on_connection(&self, host: &str, connection: openssh::Session) -> Arc<Nixos> {
         match self {
             Flavor::Nixos => Arc::new(Nixos::new(host.to_owned(), connection)),
         }
