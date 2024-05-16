@@ -210,7 +210,7 @@ impl FromStr for Flavor {
 impl fmt::Display for Flavor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Flavor::Nixos => write!(f, "nixos")
+            Flavor::Nixos => write!(f, "nixos"),
         }
     }
 }
