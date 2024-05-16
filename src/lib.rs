@@ -207,10 +207,10 @@ impl FromStr for Flavor {
     }
 }
 
-impl ToString for Flavor {
-    fn to_string(&self) -> String {
+impl fmt::Display for Flavor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Flavor::Nixos => "nixos".to_string(),
+            Flavor::Nixos => write!(f, "nixos")
         }
     }
 }
