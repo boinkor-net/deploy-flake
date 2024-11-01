@@ -2,8 +2,12 @@
   description = "A tool for deploying a nix flake to remote systems";
 
   inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs?ref=nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    fenix = {
+      url = "github:nix-community/fenix?ref=main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -14,22 +18,20 @@
     self,
     nixpkgs,
     flake-utils,
-    rust-overlay,
+    fenix,
     gitignore,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [(import rust-overlay)];
       };
       nativeBuildInputs = [pkgs.libiconv];
     in {
       packages = {
         deploy-flake = let
           rustPlatform = pkgs.makeRustPlatform {
-            rustc = pkgs.rust-bin.stable.latest.minimal;
-            cargo = pkgs.rust-bin.stable.latest.minimal;
+            inherit (fenix.packages.${system}.stable) rustc cargo;
           };
           inherit (gitignore.lib) gitignoreSource;
         in
