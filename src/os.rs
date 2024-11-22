@@ -22,7 +22,7 @@ pub(crate) trait NixOperatingSystem: fmt::Debug {
     async fn preflight_check_closure(
         &self,
         derivation: &Path,
-        script: &Path,
+        script: Option<&Path>,
     ) -> Result<(), anyhow::Error>;
 
     /// Builds a system configuration closure from the flake and
