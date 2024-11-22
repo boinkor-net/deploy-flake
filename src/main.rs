@@ -96,8 +96,10 @@ struct Opts {
 
     /// A program contained in the new system closure, run on the
     /// system being deployed, that checks whether the system closure
-    /// is deployable. This program should be created with
-    /// `system.extraSystemBuilderCmds` for NixOS.
+    /// is deployable. This program can be created with
+    /// `system.extraSystemBuilderCmds` for NixOS.  See the
+    /// https://github.com/boinkor-net/preroll-safety library for an
+    /// example of pre-activation safety checks.
     #[clap(long, require_equals = true, value_name = "PROGRAM")]
     pre_activate_script: Option<PathBuf>,
 
@@ -213,10 +215,9 @@ async fn deploy(
         log::event!(log::Level::DEBUG, dest=?destination.hostname, "Skipping system health check");
     }
 
-    if let Some(script) = pre_activate_script {
-        log::event!(log::Level::INFO, dest=?destination.hostname, script=?script, "Running pre-activation script");
-        built.preflight_check_closure(&script).await?;
-    }
+    built
+        .preflight_check_closure(pre_activate_script.as_deref())
+        .await?;
 
     if do_test == Behavior::Run {
         log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");

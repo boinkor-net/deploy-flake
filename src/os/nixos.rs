@@ -22,6 +22,8 @@ pub struct Nixos {
     session: openssh::Session,
 }
 
+pub const DEFAULT_PREFLIGHT_SCRIPT_NAME: &str = "pre-activate-safety-checks";
+
 fn strip_shell_output(output: Output) -> String {
     let len = &output.stdout.len();
     let last_byte = output.stdout[len - 1];
@@ -73,6 +75,25 @@ impl Nixos {
             ));
         }
         Ok(strip_shell_output(output))
+    }
+
+    #[instrument(level = "DEBUG", fields(pathname), err)]
+    async fn test_file_existence<'s>(&self, path: &Path) -> Result<bool, anyhow::Error> {
+        let mut cmd = self.session.command("test");
+        cmd.arg("-f").raw_arg(path);
+        cmd.stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::inherit());
+        log::event!(log::Level::DEBUG, command=?cmd, "Running");
+        let mut child = cmd.spawn().await?;
+        let stderr_read = tokio::task::spawn(
+            read_and_log_messages("E", child.stderr().take().unwrap())
+                .instrument(log::Span::current()),
+        );
+        let status = futures::join!(child.wait(), stderr_read);
+        let exit_status = status.0?;
+        log::event!(log::Level::DEBUG, command=?cmd, ?exit_status, "Finished");
+        Ok(exit_status.success())
     }
 
     #[instrument(level = "DEBUG", fields(cmd), err)]
@@ -143,12 +164,22 @@ impl NixOperatingSystem for Nixos {
     async fn preflight_check_closure(
         &self,
         derivation: &Path,
-        script: &Path,
+        script: Option<&Path>,
     ) -> Result<(), anyhow::Error> {
-        let script_path = derivation.join(script);
-
+        let script_path = if script.is_none() {
+            // Try to use the default pre-activation script name emitted by preflight-safety:
+            let script_path = derivation.join(DEFAULT_PREFLIGHT_SCRIPT_NAME);
+            log::event!(log::Level::DEBUG, dest=?self.host, script=?script_path.file_name(), "Checking for existence of inferred pre-activation script");
+            if !self.test_file_existence(&script_path).await? {
+                return Ok(());
+            }
+            script_path
+        } else {
+            derivation.join(script.unwrap())
+        };
+        log::event!(log::Level::INFO, dest=?self.host, script=?script_path.file_name(), "Running pre-activation script");
         let mut cmd = self.session.command("sudo");
-        cmd.arg(script_path.to_string_lossy());
+        cmd.raw_arg(script_path);
         self.run_command(cmd)
             .await
             .context("System closure self-checks failed")?;

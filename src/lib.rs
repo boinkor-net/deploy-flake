@@ -163,7 +163,10 @@ impl SystemConfiguration {
     }
 
     #[instrument(level="DEBUG", skip(self) err)]
-    pub async fn preflight_check_closure(&self, script: &Path) -> Result<(), anyhow::Error> {
+    pub async fn preflight_check_closure(
+        &self,
+        script: Option<&Path>,
+    ) -> Result<(), anyhow::Error> {
         self.system
             .preflight_check_closure(&self.path, script)
             .await
