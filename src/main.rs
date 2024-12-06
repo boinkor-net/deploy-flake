@@ -4,53 +4,11 @@ use tracing::instrument;
 
 use anyhow::Context;
 use clap::Parser;
-use deploy_flake::{Flake, Flavor};
+use deploy_flake::{Destination, Flake};
 use openssh::{KnownHosts, Session};
 use std::{path::PathBuf, str::FromStr};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
-use url::Url;
-
-#[derive(Debug, Clone)]
-struct Destination {
-    os_flavor: Flavor,
-    hostname: String,
-    config_name: Option<String>,
-}
-
-impl FromStr for Destination {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(url) = Url::parse(s) {
-            // we have a URL, let's see if it matches something we can deal with:
-            match (url.scheme(), url.host_str(), url.path(), url.username()) {
-                ("nixos", Some(host), path, username) => {
-                    let hostname = if username.is_empty() {
-                        host.to_string()
-                    } else {
-                        format!("{username}@{host}")
-                    };
-                    Ok(Destination {
-                        os_flavor: Flavor::Nixos,
-                        hostname,
-                        config_name: path
-                            .strip_prefix('/')
-                            .filter(|path| !path.is_empty())
-                            .map(String::from),
-                    })
-                }
-                _ => anyhow::bail!("Unable to parse {s}"),
-            }
-        } else {
-            Ok(Destination {
-                os_flavor: Flavor::Nixos,
-                hostname: s.to_string(),
-                config_name: None,
-            })
-        }
-    }
-}
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Eq, PartialEq)]
 enum Behavior {

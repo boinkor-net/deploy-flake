@@ -47,3 +47,6 @@ version = "1.40.0"
 [metadata.template_ci.clippy]
 allow_failure = false
 version = "stable"
+
+[dev-dependencies]
+test-case = "3.3.1"

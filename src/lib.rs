@@ -16,6 +16,7 @@ use std::{
     sync::Arc,
 };
 use tokio::process::Command;
+use url::Url;
 
 /// The tracing target that's used to log messages emitted by
 /// subprocesses.
@@ -223,5 +224,61 @@ impl Flavor {
         match self {
             Flavor::Nixos => Arc::new(Nixos::new(host.to_owned(), connection)),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Destination {
+    pub os_flavor: Flavor,
+    pub hostname: String,
+    pub config_name: Option<String>,
+}
+
+impl FromStr for Destination {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(url) = Url::parse(s) {
+            // we have a URL, let's see if it matches something we can deal with:
+            match (url.scheme(), url.host_str(), url.path(), url.username()) {
+                ("nixos", Some(host), path, username) => {
+                    let hostname = if username.is_empty() {
+                        host.to_string()
+                    } else {
+                        format!("{username}@{host}")
+                    };
+                    Ok(Destination {
+                        os_flavor: Flavor::Nixos,
+                        hostname,
+                        config_name: path
+                            .strip_prefix('/')
+                            .filter(|path| !path.is_empty())
+                            .map(String::from),
+                    })
+                }
+                _ => anyhow::bail!("Unable to parse {s}"),
+            }
+        } else {
+            Ok(Destination {
+                os_flavor: Flavor::Nixos,
+                hostname: s.to_string(),
+                config_name: None,
+            })
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Destination;
+    use test_case::test_case;
+
+    #[test_case("nixos://foo", true ; "when both operands are negative")]
+    #[test_case("fleepybeepo://foo", false ; "invalid flavor")]
+    #[test_case("nixos:///foo", false ; "invalid hostname")]
+    #[test_case("nixos://foobar@foo", true ; "with a username")]
+    #[test_case("nixos://foobar@foo/configname", true ; "with a config name")]
+    fn destination_parsing(input: &str, parses: bool) {
+        assert_eq!(input.parse::<Destination>().is_ok(), parses);
     }
 }
