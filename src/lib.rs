@@ -222,9 +222,9 @@ impl fmt::Display for Flavor {
 }
 
 impl Flavor {
-    pub fn on_connection(&self, host: &str, connection: openssh::Session) -> Arc<Nixos> {
+    pub fn on_connection(&self, dest: &Destination, connection: openssh::Session) -> Arc<Nixos> {
         match self {
-            Flavor::Nixos => Arc::new(Nixos::new(host.to_owned(), connection)),
+            Flavor::Nixos => Arc::new(Nixos::new(dest.clone(), connection)),
         }
     }
 }
@@ -299,6 +299,12 @@ impl FromStr for Destination {
                 build_kind: Default::default()
             })
         }
+    }
+}
+
+impl fmt::Display for Destination {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}://{}/{}", self.os_flavor, self.hostname, self.config_name.as_deref().unwrap_or(""))
     }
 }
 
