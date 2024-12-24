@@ -9,6 +9,8 @@ pub(crate) use os::{NixOperatingSystem, Verb};
 
 use anyhow::{anyhow, bail, Context};
 use os::Nixos;
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -227,11 +229,35 @@ impl Flavor {
     }
 }
 
+/// Where and how to perform the build
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum BuildKind{
+    /// Build on the deploy destination host
+    #[default]
+    OnDestination,
+
+    /// Build on the system running deploy-flake
+    Local,
+}
+
+impl FromStr for BuildKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "local" => Ok(BuildKind::Local),
+            "on_destination" => Ok(BuildKind::OnDestination),
+            _ => Err(anyhow::anyhow!("Could not parse build kind {:?}", s))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Destination {
     pub os_flavor: Flavor,
     pub hostname: String,
     pub config_name: Option<String>,
+    pub build_kind: BuildKind,
 }
 
 impl FromStr for Destination {
@@ -239,6 +265,12 @@ impl FromStr for Destination {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(url) = Url::parse(s) {
+            let query: HashMap<Cow<'_, str>, Cow<'_, str>>= url.query_pairs().collect();
+            let build_kind = if let Some(build_kind) = query.get("build_kind") {
+                build_kind.parse::<BuildKind>().with_context(|| format!("Parsing {:?}", s))?
+            } else {
+                Default::default()
+            };
             // we have a URL, let's see if it matches something we can deal with:
             match (url.scheme(), url.host_str(), url.path(), url.username()) {
                 ("nixos", Some(host), path, username) => {
@@ -254,6 +286,7 @@ impl FromStr for Destination {
                             .strip_prefix('/')
                             .filter(|path| !path.is_empty())
                             .map(String::from),
+                        build_kind,
                     })
                 }
                 _ => anyhow::bail!("Unable to parse {s}"),
@@ -263,6 +296,7 @@ impl FromStr for Destination {
                 os_flavor: Flavor::Nixos,
                 hostname: s.to_string(),
                 config_name: None,
+                build_kind: Default::default()
             })
         }
     }
