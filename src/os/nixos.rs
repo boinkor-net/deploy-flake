@@ -1,4 +1,4 @@
-use crate::read_and_log_messages;
+use crate::{read_and_log_messages, Destination};
 use anyhow::Context;
 use openssh::{Command, Stdio};
 use tokio::io::AsyncReadExt;
@@ -18,7 +18,7 @@ use crate::{NixOperatingSystem, Verb};
 
 /// A nixos operating system instance.
 pub struct Nixos {
-    host: String,
+    host: Destination,
     session: openssh::Session,
 }
 
@@ -36,7 +36,7 @@ fn strip_shell_output(output: Output) -> String {
 
 impl Nixos {
     /// Setup a new Nixos connection
-    pub(crate) fn new(host: String, session: openssh::Session) -> Self {
+    pub(crate) fn new(host: Destination, session: openssh::Session) -> Self {
         Self { host, session }
     }
 
@@ -169,7 +169,7 @@ impl NixOperatingSystem for Nixos {
         let script_path = if script.is_none() {
             // Try to use the default pre-activation script name emitted by preflight-safety:
             let script_path = derivation.join(DEFAULT_PREFLIGHT_SCRIPT_NAME);
-            log::event!(log::Level::DEBUG, dest=?self.host, script=?script_path.file_name(), "Checking for existence of inferred pre-activation script");
+            log::event!(log::Level::DEBUG, dest=%self.host, script=?script_path.file_name(), "Checking for existence of inferred pre-activation script");
             if !self.test_file_existence(&script_path).await? {
                 return Ok(());
             }
@@ -177,7 +177,7 @@ impl NixOperatingSystem for Nixos {
         } else {
             derivation.join(script.unwrap())
         };
-        log::event!(log::Level::INFO, dest=?self.host, script=?script_path.file_name(), "Running pre-activation script");
+        log::event!(log::Level::INFO, dest=%self.host, script=?script_path.file_name(), "Running pre-activation script");
         let mut cmd = self.session.command("sudo");
         cmd.raw_arg(script_path);
         self.run_command(cmd)
@@ -260,7 +260,7 @@ impl NixOperatingSystem for Nixos {
         Ok(())
     }
 
-    #[instrument(level = "DEBUG", skip(self), fields(host=self.host), err)]
+    #[instrument(level = "DEBUG", skip(self), fields(host=%self.host), err)]
     async fn test_config(&self, derivation: &Path) -> Result<(), anyhow::Error> {
         let mut cmd = self.session.command("sudo");
         let flake_base_name = derivation
