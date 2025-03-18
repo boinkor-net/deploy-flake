@@ -42,11 +42,5 @@ version = "1.0.219"
 features = ["full"]
 version = "1.44.0"
 
-[metadata]
-[metadata.template_ci]
-[metadata.template_ci.clippy]
-allow_failure = false
-version = "stable"
-
 [dev-dependencies]
 test-case = "3.3.1"
