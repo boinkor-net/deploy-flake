@@ -3,8 +3,8 @@ use anyhow::Context;
 use openssh::{Command, Stdio};
 use tokio::io::AsyncReadExt;
 use tracing as log;
-use tracing::instrument;
 use tracing::Instrument;
+use tracing::instrument;
 
 use core::fmt;
 use serde::Deserialize;

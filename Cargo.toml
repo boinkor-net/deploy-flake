@@ -2,7 +2,7 @@
 authors = ["Andreas Fuchs <asf@boinkor.net>"]
 description = "Deploy a nix flake to a remote system"
 documentation = "https://docs.rs/deploy-flake"
-edition = "2018"
+edition = "2024"
 license = "MIT"
 name = "deploy-flake"
 readme = "README.md"
@@ -41,12 +41,6 @@ version = "1.0.219"
 [dependencies.tokio]
 features = ["full"]
 version = "1.44.0"
-
-[metadata]
-[metadata.template_ci]
-[metadata.template_ci.clippy]
-allow_failure = false
-version = "stable"
 
 [dev-dependencies]
 test-case = "3.3.1"

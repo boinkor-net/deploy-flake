@@ -7,7 +7,7 @@ use tracing as log;
 
 pub(crate) use os::{NixOperatingSystem, Verb};
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use os::Nixos;
 use std::{
     fmt,
