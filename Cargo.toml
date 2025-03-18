@@ -2,7 +2,7 @@
 authors = ["Andreas Fuchs <asf@boinkor.net>"]
 description = "Deploy a nix flake to a remote system"
 documentation = "https://docs.rs/deploy-flake"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 name = "deploy-flake"
 readme = "README.md"

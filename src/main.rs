@@ -7,8 +7,8 @@ use clap::Parser;
 use deploy_flake::{Destination, Flake};
 use openssh::{KnownHosts, Session};
 use std::{path::PathBuf, str::FromStr};
-use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Eq, PartialEq)]
 enum Behavior {
