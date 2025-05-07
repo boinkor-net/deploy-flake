@@ -40,7 +40,7 @@ version = "1.0.219"
 
 [dependencies.tokio]
 features = ["full"]
-version = "1.44.2"
+version = "1.45.0"
 
 [dev-dependencies]
 test-case = "3.3.1"
