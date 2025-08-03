@@ -303,7 +303,7 @@ impl NixOperatingSystem for Nixos {
             .arg(derivation.to_string_lossy());
         self.run_command(cmd)
             .await
-            .with_context(|| format!("Could not set {:?} up as the boot system", derivation))?;
+            .with_context(|| format!("Could not set {derivation:?} up as the boot system"))?;
         Ok(())
     }
 }
