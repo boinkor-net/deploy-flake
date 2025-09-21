@@ -169,13 +169,12 @@ async fn deploy(
     if do_preflight == Behavior::Run {
         log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
         built.preflight_check_system().await?;
+        built
+            .preflight_check_closure(pre_activate_script.as_deref())
+            .await?;
     } else {
-        log::event!(log::Level::DEBUG, dest=?destination.hostname, "Skipping system health check");
+        log::event!(log::Level::DEBUG, dest=?destination.hostname, "Skipping system and closure health check");
     }
-
-    built
-        .preflight_check_closure(pre_activate_script.as_deref())
-        .await?;
 
     if do_test == Behavior::Run {
         log::event!(log::Level::DEBUG, configuration=?built.configuration(), system_name=?built.for_system(), "Testing");
