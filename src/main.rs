@@ -156,7 +156,7 @@ async fn deploy(
 
     log::debug!("Connecting");
     let flavor = destination.os_flavor.on_connection(
-        &destination.hostname,
+        &destination,
         Session::connect(&destination.hostname, KnownHosts::Strict)
             .await
             .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,

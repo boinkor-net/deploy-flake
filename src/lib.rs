@@ -9,6 +9,8 @@ pub(crate) use os::{NixOperatingSystem, Verb};
 
 use anyhow::{Context, anyhow, bail};
 use os::Nixos;
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::{
     fmt,
     path::{Path, PathBuf},
@@ -220,9 +222,32 @@ impl fmt::Display for Flavor {
 }
 
 impl Flavor {
-    pub fn on_connection(&self, host: &str, connection: openssh::Session) -> Arc<Nixos> {
+    pub fn on_connection(&self, dest: &Destination, connection: openssh::Session) -> Arc<Nixos> {
         match self {
-            Flavor::Nixos => Arc::new(Nixos::new(host.to_owned(), connection)),
+            Flavor::Nixos => Arc::new(Nixos::new(dest.clone(), connection)),
+        }
+    }
+}
+
+/// Where and how to perform the build
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum BuildKind{
+    /// Build on the deploy destination host
+    #[default]
+    OnDestination,
+
+    /// Build on the system running deploy-flake
+    Local,
+}
+
+impl FromStr for BuildKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "local" => Ok(BuildKind::Local),
+            "on_destination" => Ok(BuildKind::OnDestination),
+            _ => Err(anyhow::anyhow!("Could not parse build kind {:?}", s))
         }
     }
 }
@@ -232,6 +257,7 @@ pub struct Destination {
     pub os_flavor: Flavor,
     pub hostname: String,
     pub config_name: Option<String>,
+    pub build_kind: BuildKind,
 }
 
 impl FromStr for Destination {
@@ -239,6 +265,12 @@ impl FromStr for Destination {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(url) = Url::parse(s) {
+            let query: HashMap<Cow<'_, str>, Cow<'_, str>>= url.query_pairs().collect();
+            let build_kind = if let Some(build_kind) = query.get("build_kind") {
+                build_kind.parse::<BuildKind>().with_context(|| format!("Parsing {:?}", s))?
+            } else {
+                Default::default()
+            };
             // we have a URL, let's see if it matches something we can deal with:
             match (url.scheme(), url.host_str(), url.path(), url.username()) {
                 ("nixos", Some(host), path, username) => {
@@ -254,6 +286,7 @@ impl FromStr for Destination {
                             .strip_prefix('/')
                             .filter(|path| !path.is_empty())
                             .map(String::from),
+                        build_kind,
                     })
                 }
                 _ => anyhow::bail!("Unable to parse {s}"),
@@ -263,8 +296,15 @@ impl FromStr for Destination {
                 os_flavor: Flavor::Nixos,
                 hostname: s.to_string(),
                 config_name: None,
+                build_kind: Default::default()
             })
         }
+    }
+}
+
+impl fmt::Display for Destination {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}://{}/{}", self.os_flavor, self.hostname, self.config_name.as_deref().unwrap_or(""))
     }
 }
 
