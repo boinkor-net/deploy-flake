@@ -1,11 +1,16 @@
+use clap_duration::duration_range_value_parse;
 use tokio::task;
+use tokio::time::timeout;
 use tracing as log;
 use tracing::instrument;
 
 use anyhow::Context;
+use backon::Retryable as _;
 use clap::Parser;
 use deploy_flake::{Destination, Flake};
+use duration_human::{DurationHuman, DurationHumanValidator};
 use openssh::{KnownHosts, Session};
+use std::time::Duration;
 use std::{path::PathBuf, str::FromStr};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -78,6 +83,12 @@ struct Opts {
         default_value = "--extra-experimental-features nix-command --extra-experimental-features flakes"
     )]
     build_cmdline: Vec<String>,
+
+    /// Time to allow for `nix-copy-closure` to succeed.
+    /// This program has a bad tendency to hang if any hiccups
+    /// on the line occur, but larger closures take longer to copy.
+    #[clap(long, value_name = "DURATION", value_parser = duration_range_value_parse!(min: 1s, max: 6h), default_value = "5s")]
+    copy_timeout: DurationHuman,
 }
 
 #[instrument(err)]
@@ -120,6 +131,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let do_test = opts.test;
     let pre_activate_script = opts.pre_activate_script;
     let build_cmdline = opts.build_cmdline.clone();
+    let copy_timeout = (&opts.copy_timeout).into();
 
     futures::future::try_join_all(opts.to.into_iter().map(|destination| {
         let flake = flake.clone();
@@ -129,6 +141,7 @@ async fn main() -> Result<(), anyhow::Error> {
             deploy(
                 flake,
                 destination,
+                copy_timeout,
                 do_preflight,
                 pre_activate_script,
                 do_test,
@@ -142,17 +155,25 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[instrument(skip(flake, destination, pre_activate_script, do_test, build_cmdline), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
+#[instrument(skip(flake, destination, pre_activate_script, do_test, build_cmdline, copy_timeout), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(
     flake: Flake,
     destination: Destination,
+    copy_timeout: Duration,
     do_preflight: Behavior,
     pre_activate_script: Option<PathBuf>,
     do_test: Behavior,
     build_cmdline: Vec<String>,
 ) -> Result<(), anyhow::Error> {
     log::event!(log::Level::DEBUG, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
-    flake.copy_closure(&destination.hostname).await?;
+    let closure_copier =
+        || async { timeout(copy_timeout, flake.copy_closure(&destination.hostname)).await };
+    closure_copier
+        .retry(backon::ExponentialBuilder::default())
+        .notify(|error: &tokio::time::error::Elapsed, backoff: Duration| {
+            log::warn!(%error, ?backoff, "Timed out copying the closure, retrying...");
+        })
+        .await??;
 
     log::debug!("Connecting");
     let flavor = destination.os_flavor.on_connection(

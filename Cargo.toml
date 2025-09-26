@@ -29,6 +29,9 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "*"
 tracing-indicatif = "0.3.10"
+backon = { version = "1.5.2", features = ["tokio"] }
+clap-duration = "0.1.11"
+duration-human = "0.1.10"
 
 [dependencies.clap]
 features = ["derive"]
