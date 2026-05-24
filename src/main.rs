@@ -7,13 +7,11 @@ use tracing::instrument;
 use anyhow::Context;
 use backon::Retryable as _;
 use clap::Parser;
-use deploy_flake::{Destination, Flake};
+use deploy_flake::{Destination, Flake, Instrumentation};
 use duration_human::{DurationHuman, DurationHumanValidator};
 use openssh::{KnownHosts, Session};
 use std::time::Duration;
 use std::{path::PathBuf, str::FromStr};
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::prelude::*;
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Eq, PartialEq)]
 enum Behavior {
@@ -89,39 +87,19 @@ struct Opts {
     /// on the line occur, but larger closures take longer to copy.
     #[clap(long, value_name = "DURATION", value_parser = duration_range_value_parse!(min: 1s, max: 6h), default_value = "5s")]
     copy_timeout: DurationHuman,
+
+    /// What kind of instrumentation to emit.
+    /// Either "tui" or "json".
+    #[clap(long, default_value = "tui")]
+    instrumentation: Instrumentation,
 }
 
 #[instrument(err)]
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let indicatif_layer = tracing_indicatif::IndicatifLayer::new();
-    let filter = EnvFilter::builder()
-        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-        .from_env_lossy();
-    let writer = indicatif_layer.get_stderr_writer();
-    let app_log_layer = tracing_subscriber::fmt::layer()
-        .with_target(false)
-        .compact()
-        .with_writer(writer.clone())
-        .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-            metadata.target() != deploy_flake::SUBPROCESS_LOG_TARGET
-        }));
-    let subprocess_log_layer = tracing_subscriber::fmt::layer()
-        .with_target(false)
-        .with_level(false)
-        .compact()
-        .with_writer(writer.clone())
-        .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-            metadata.target() == deploy_flake::SUBPROCESS_LOG_TARGET
-        }));
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(app_log_layer)
-        .with(subprocess_log_layer)
-        .with(indicatif_layer)
-        .init();
-
     let opts: Opts = Opts::parse();
+
+    opts.instrumentation.setup();
     log::trace!(cmdline = ?opts);
 
     let flake = Flake::from_path(&opts.flake)?;
