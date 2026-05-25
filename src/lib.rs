@@ -1,10 +1,12 @@
 use log::Instrument;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tracing::instrument;
+mod instrumentation;
 mod nix;
 mod os;
 use tracing as log;
 
+pub use instrumentation::Instrumentation;
 pub(crate) use os::{NixOperatingSystem, Verb};
 
 use anyhow::{Context, anyhow, bail};
@@ -47,6 +49,8 @@ pub(crate) async fn read_and_log_messages(
         log::event!(
             target: SUBPROCESS_LOG_TARGET,
             log::Level::INFO,
+            stream,
+            stream_prefix=format!("{stream} "),
             "{stream} {line}"
         );
     }
