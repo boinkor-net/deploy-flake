@@ -1,6 +1,7 @@
 use log::Instrument;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tracing::instrument;
+pub mod commands;
 mod instrumentation;
 mod nix;
 mod os;
@@ -237,7 +238,7 @@ impl Flavor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Destination {
     pub os_flavor: Flavor,
     pub hostname: String,
