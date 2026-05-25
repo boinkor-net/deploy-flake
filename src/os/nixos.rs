@@ -78,7 +78,7 @@ impl Nixos {
     }
 
     #[instrument(level = "DEBUG", fields(pathname), err)]
-    async fn test_file_existence<'s>(&self, path: &Path) -> Result<bool, anyhow::Error> {
+    async fn test_file_existence(&self, path: &Path) -> Result<bool, anyhow::Error> {
         let mut cmd = self.session.command("test");
         cmd.arg("-f").raw_arg(path);
         cmd.stdout(Stdio::null())
@@ -166,7 +166,9 @@ impl NixOperatingSystem for Nixos {
         derivation: &Path,
         script: Option<&Path>,
     ) -> Result<(), anyhow::Error> {
-        let script_path = if script.is_none() {
+        let script_path = if let Some(script) = script {
+            derivation.join(script)
+        } else {
             // Try to use the default pre-activation script name emitted by preflight-safety:
             let script_path = derivation.join(DEFAULT_PREFLIGHT_SCRIPT_NAME);
             log::event!(log::Level::DEBUG, dest=?self.host, script=?script_path.file_name(), "Checking for existence of inferred pre-activation script");
@@ -174,8 +176,6 @@ impl NixOperatingSystem for Nixos {
                 return Ok(());
             }
             script_path
-        } else {
-            derivation.join(script.unwrap())
         };
         log::event!(log::Level::INFO, dest=?self.host, script=?script_path.file_name(), "Running pre-activation script");
         let mut cmd = self.session.command("sudo");
