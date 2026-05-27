@@ -43,17 +43,20 @@ pub async fn status(destination: Destination) -> anyhow::Result<()> {
     );
     log::debug!("Retrieving status");
     let status = flavor
-        .current_system_info()
+        .closure_info("/run/current-system")
         .await
         .with_context(|| format!("Status for {destination:?}"))?;
 
+    let system_health = flavor.preflight_check_system().await?;
+
     let formatter = humansize::make_format(humansize::DECIMAL);
     log::info!(
+        ?system_health,
         registration_time=?status.registration_time,
         closure_size_human = formatter(status.closure_size),
         closure_size=status.closure_size,
         path=?status.path,
-        "Got status"
+        "status"
     );
     Ok(())
 }

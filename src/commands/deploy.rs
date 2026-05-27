@@ -123,7 +123,13 @@ async fn deploy(
 
     if opts.preflight_check == Behavior::Run {
         log::event!(log::Level::DEBUG, dest=?destination.hostname, "Checking system health");
-        built.preflight_check_system().await?;
+        built
+            .preflight_check_system()
+            .await?
+            .map_err(|failed_units| {
+                log::event!(log::Level::WARN, ?failed_units, "Failed systemd units");
+                anyhow::anyhow!("Refusing to deploy to a system with failed units {failed_units:?}")
+            })?;
         built
             .preflight_check_closure(opts.pre_activate_script.as_deref())
             .await?;

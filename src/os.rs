@@ -29,10 +29,15 @@ pub struct ClosureInfo {
 }
 
 pub(crate) trait NixOperatingSystem: fmt::Debug {
-    async fn current_system_info(&self) -> Result<ClosureInfo, anyhow::Error>;
+    /// Returns information about the closure at a given path.
+    async fn closure_info(&self, closure_path: &str) -> Result<ClosureInfo, anyhow::Error>;
 
-    /// Checks if the target system is able to be deployed to.
-    async fn preflight_check_system(&self) -> Result<(), anyhow::Error>;
+    /// Returns a list of failed units on the system (indicating whether it's ready to be deployed to).
+    ///
+    /// If nothing is wrong with the system, the vector will be empty;
+    /// otherwise it contains the set of failed units. If anything went
+    /// wrong with checking the system health, it returns an error.
+    async fn preflight_check_system(&self) -> anyhow::Result<Result<(), Vec<String>>>;
 
     /// Checks if the built closure can be deployed to the system.
     async fn preflight_check_closure(

@@ -133,7 +133,7 @@ impl Nixos {
 
 impl NixOperatingSystem for Nixos {
     #[instrument(level = "INFO", err)]
-    async fn preflight_check_system(&self) -> Result<(), anyhow::Error> {
+    async fn preflight_check_system(&self) -> anyhow::Result<Result<(), Vec<String>>> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
         cmd.args(["systemctl", "is-system-running", "--wait"]);
@@ -148,19 +148,23 @@ impl NixOperatingSystem for Nixos {
             let output = self
                 .session
                 .command("sudo")
-                .args(["systemctl", "list-units", "--failed"])
+                .args([
+                    "systemctl",
+                    "list-units",
+                    "--failed",
+                    "--full",
+                    "--legend=false",
+                ])
                 .stdout(Stdio::piped())
                 .output()
                 .await?;
-            log::event!(
-                log::Level::WARN,
-                "Failed units:\n{}",
-                String::from_utf8_lossy(&output.stdout)
-            );
-            anyhow::bail!("Can not deploy to an unhealthy system");
+            let stdout = String::from_utf8(output.stdout)
+                .with_context(|| "non-utf8-clean output {output:?}")?;
+            let lines = stdout.lines().map(|l| l.to_string());
+            return Ok(Err(lines.collect()));
         }
         log::event!(log::Level::DEBUG, ?status, "System is healthy");
-        Ok(())
+        Ok(Ok(()))
     }
 
     #[instrument(level = "INFO", err)]
@@ -311,9 +315,9 @@ impl NixOperatingSystem for Nixos {
     }
 
     #[instrument(level = "DEBUG", err)]
-    async fn current_system_info(&self) -> Result<super::ClosureInfo, anyhow::Error> {
+    async fn closure_info(&self, closure_path: &str) -> Result<super::ClosureInfo, anyhow::Error> {
         let mut cmd = self.session.command("nix");
-        cmd.args(["path-info", "--json", "-S", "/run/current-system"]);
+        cmd.args(["path-info", "--json", "-S"]).arg(closure_path);
         cmd.stdout(Stdio::piped());
 
         #[derive(Deserialize)]

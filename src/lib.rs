@@ -170,7 +170,7 @@ impl SystemConfiguration {
     }
 
     #[instrument(level="DEBUG", skip(self) err)]
-    pub async fn preflight_check_system(&self) -> Result<(), anyhow::Error> {
+    pub async fn preflight_check_system(&self) -> anyhow::Result<Result<(), Vec<String>>> {
         self.system.preflight_check_system().await
     }
 
