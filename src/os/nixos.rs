@@ -1,6 +1,8 @@
 use crate::StreamOrigin;
+use crate::os::ClosureInfo;
 use crate::read_and_log_messages;
 use anyhow::Context;
+use chrono::DateTime;
 use openssh::{Command, Stdio};
 use tokio::io::AsyncReadExt;
 use tracing as log;
@@ -306,6 +308,52 @@ impl NixOperatingSystem for Nixos {
             .await
             .with_context(|| format!("Could not set {derivation:?} up as the boot system"))?;
         Ok(())
+    }
+
+    #[instrument(level = "DEBUG", err)]
+    async fn current_system_info(&self) -> Result<super::ClosureInfo, anyhow::Error> {
+        let mut cmd = self.session.command("nix");
+        cmd.args(["path-info", "--json", "-S", "/run/current-system"]);
+        cmd.stdout(Stdio::piped());
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PathInfoOutput {
+            path: PathBuf,
+            registration_time: i64,
+            closure_size: usize,
+        }
+
+        let status_output = cmd
+            .output()
+            .await
+            .context("Could not retrieve information about currently-activated closure")?;
+        if !status_output.status.success() {
+            anyhow::bail!(
+                "nix path-info returned an error code: {:?}",
+                status_output.status
+            );
+        }
+        let status: Vec<PathInfoOutput> = serde_json::from_slice(status_output.stdout.as_ref())
+            .with_context(|| {
+                format!(
+                    "Could not parse closure info JSON from {:?}",
+                    String::from_utf8_lossy(status_output.stdout.as_ref())
+                )
+            })?;
+        let Some(status) = status.first() else {
+            anyhow::bail!("Did not receive one path-info element");
+        };
+        Ok(ClosureInfo {
+            path: status.path.clone(),
+            closure_size: status.closure_size,
+            registration_time: DateTime::from_timestamp(status.registration_time, 0).ok_or(
+                anyhow::anyhow!(
+                    "Could not parse unix timestamp {}",
+                    status.registration_time
+                ),
+            )?,
+        })
     }
 }
 

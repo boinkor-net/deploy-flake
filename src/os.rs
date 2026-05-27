@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use chrono::{DateTime, Utc};
 pub use nixos::Nixos;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -14,7 +15,22 @@ pub enum Verb {
     Boot,
 }
 
+/// Information about a currently-running system closure
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct ClosureInfo {
+    /// Path of the closure
+    pub path: PathBuf,
+
+    /// Size of the closure, as given by `nix-path-info`
+    pub closure_size: usize,
+
+    /// Time the closure was registered in the nix store
+    pub registration_time: DateTime<Utc>,
+}
+
 pub(crate) trait NixOperatingSystem: fmt::Debug {
+    async fn current_system_info(&self) -> Result<ClosureInfo, anyhow::Error>;
+
     /// Checks if the target system is able to be deployed to.
     async fn preflight_check_system(&self) -> Result<(), anyhow::Error>;
 

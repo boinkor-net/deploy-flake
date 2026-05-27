@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 use crate::{Flake, Instrumentation};
 
 pub mod deploy;
+pub mod status;
 
 /// Determines the behavior for certain aspects of the deploy process
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,12 +50,17 @@ pub enum Command {
     /// Run a full deploy lifecycle for the systems configured in the flake.
     #[command(arg_required_else_help = true)]
     Deploy(deploy::Opts),
+
+    /// Print the status of the given hosts.
+    #[command(arg_required_else_help = true)]
+    Status(status::Opts),
 }
 
 impl Command {
     pub async fn run(self, flake: Flake) -> Result<(), anyhow::Error> {
         match self {
             Command::Deploy(opts) => deploy::run(flake, opts).await,
+            Command::Status(opts) => status::run(opts).await,
         }
     }
 }
