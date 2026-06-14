@@ -1,6 +1,8 @@
 use crate::StreamOrigin;
+use crate::os::ClosureInfo;
 use crate::read_and_log_messages;
 use anyhow::Context;
+use chrono::DateTime;
 use openssh::{Command, Stdio};
 use tokio::io::AsyncReadExt;
 use tracing as log;
@@ -131,7 +133,7 @@ impl Nixos {
 
 impl NixOperatingSystem for Nixos {
     #[instrument(level = "INFO", err)]
-    async fn preflight_check_system(&self) -> Result<(), anyhow::Error> {
+    async fn preflight_check_system(&self) -> anyhow::Result<Result<(), Vec<String>>> {
         let mut cmd = self.session.command("sudo");
         cmd.stdout(Stdio::piped());
         cmd.args(["systemctl", "is-system-running", "--wait"]);
@@ -146,19 +148,23 @@ impl NixOperatingSystem for Nixos {
             let output = self
                 .session
                 .command("sudo")
-                .args(["systemctl", "list-units", "--failed"])
+                .args([
+                    "systemctl",
+                    "list-units",
+                    "--failed",
+                    "--full",
+                    "--legend=false",
+                ])
                 .stdout(Stdio::piped())
                 .output()
                 .await?;
-            log::event!(
-                log::Level::WARN,
-                "Failed units:\n{}",
-                String::from_utf8_lossy(&output.stdout)
-            );
-            anyhow::bail!("Can not deploy to an unhealthy system");
+            let stdout = String::from_utf8(output.stdout)
+                .with_context(|| "non-utf8-clean output {output:?}")?;
+            let lines = stdout.lines().map(|l| l.to_string());
+            return Ok(Err(lines.collect()));
         }
         log::event!(log::Level::DEBUG, ?status, "System is healthy");
-        Ok(())
+        Ok(Ok(()))
     }
 
     #[instrument(level = "INFO", err)]
@@ -306,6 +312,52 @@ impl NixOperatingSystem for Nixos {
             .await
             .with_context(|| format!("Could not set {derivation:?} up as the boot system"))?;
         Ok(())
+    }
+
+    #[instrument(level = "DEBUG", err)]
+    async fn closure_info(&self, closure_path: &str) -> Result<super::ClosureInfo, anyhow::Error> {
+        let mut cmd = self.session.command("nix");
+        cmd.args(["path-info", "--json", "-S"]).arg(closure_path);
+        cmd.stdout(Stdio::piped());
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PathInfoOutput {
+            path: PathBuf,
+            registration_time: i64,
+            closure_size: usize,
+        }
+
+        let status_output = cmd
+            .output()
+            .await
+            .context("Could not retrieve information about currently-activated closure")?;
+        if !status_output.status.success() {
+            anyhow::bail!(
+                "nix path-info returned an error code: {:?}",
+                status_output.status
+            );
+        }
+        let status: Vec<PathInfoOutput> = serde_json::from_slice(status_output.stdout.as_ref())
+            .with_context(|| {
+                format!(
+                    "Could not parse closure info JSON from {:?}",
+                    String::from_utf8_lossy(status_output.stdout.as_ref())
+                )
+            })?;
+        let Some(status) = status.first() else {
+            anyhow::bail!("Did not receive one path-info element");
+        };
+        Ok(ClosureInfo {
+            path: status.path.clone(),
+            closure_size: status.closure_size,
+            registration_time: DateTime::from_timestamp(status.registration_time, 0).ok_or(
+                anyhow::anyhow!(
+                    "Could not parse unix timestamp {}",
+                    status.registration_time
+                ),
+            )?,
+        })
     }
 }
 
