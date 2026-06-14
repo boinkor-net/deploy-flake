@@ -62,7 +62,7 @@ impl Instrumentation {
                         |writer, field, value| {
                             if field.name() == "message"
                                 || ((field.name() == "stdout" || field.name() == "stderr")
-                                    && format!("{value:?}").len() == 0)
+                                    && format!("{value:?}").is_empty())
                             {
                                 return Ok(());
                             }
