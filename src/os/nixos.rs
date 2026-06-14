@@ -1,3 +1,4 @@
+use crate::StreamOrigin;
 use crate::read_and_log_messages;
 use anyhow::Context;
 use openssh::{Command, Stdio};
@@ -87,7 +88,7 @@ impl Nixos {
         log::event!(log::Level::DEBUG, command=?cmd, "Running");
         let mut child = cmd.spawn().await?;
         let stderr_read = tokio::task::spawn(
-            read_and_log_messages("E", child.stderr().take().unwrap())
+            read_and_log_messages(StreamOrigin::Stderr, child.stderr().take().unwrap())
                 .instrument(log::Span::current()),
         );
         let status = futures::join!(child.wait(), stderr_read);
@@ -106,11 +107,11 @@ impl Nixos {
         let mut child = cmd.spawn().await?;
         // Read stdout/stderr line-by-line and emit them as log messages:
         let stdout_read = tokio::task::spawn(
-            read_and_log_messages("O", child.stdout().take().unwrap())
+            read_and_log_messages(StreamOrigin::Stdout, child.stdout().take().unwrap())
                 .instrument(log::Span::current()),
         );
         let stderr_read = tokio::task::spawn(
-            read_and_log_messages("E", child.stderr().take().unwrap())
+            read_and_log_messages(StreamOrigin::Stderr, child.stderr().take().unwrap())
                 .instrument(log::Span::current()),
         );
         // Now, wait for it all to finish:
@@ -223,7 +224,7 @@ impl NixOperatingSystem for Nixos {
             .arg(flake.nixos_system_config(&hostname));
         let mut child = cmd.spawn().await?;
         let stderr_log = tokio::task::spawn(read_and_log_messages(
-            "E",
+            StreamOrigin::Stderr,
             child.stderr().take().expect("should have stderr"),
         ));
         let mut child_stdout = child.stdout().take().expect("should have stdout");

@@ -60,11 +60,13 @@ impl Instrumentation {
                     .with_writer(writer.clone())
                     .fmt_fields(tracing_subscriber::fmt::format::debug_fn(
                         |writer, field, value| {
-                            if field.name() == "stream" || field.name() == "stream_prefix" {
-                                // Skip the "stream" field, as that's only useful in the JSON formatter
+                            if field.name() == "message"
+                                || ((field.name() == "stdout" || field.name() == "stderr")
+                                    && format!("{value:?}").len() == 0)
+                            {
                                 return Ok(());
                             }
-                            write!(writer, "{}={:?}", field, value)
+                            write!(writer, "{}={:?} ", field, value)
                         },
                     ))
                     .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {

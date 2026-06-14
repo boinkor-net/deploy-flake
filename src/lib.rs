@@ -34,9 +34,15 @@ pub struct Flake {
     resolved_path: PathBuf,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StreamOrigin {
+    Stderr,
+    Stdout,
+}
+
 /// Read from an AsyncRead stream and log each line as INFO-level messages.
 pub(crate) async fn read_and_log_messages(
-    stream: &str,
+    stream: StreamOrigin,
     r: impl AsyncRead + Unpin,
 ) -> Result<(), anyhow::Error> {
     let br = BufReader::new(r);
@@ -49,9 +55,9 @@ pub(crate) async fn read_and_log_messages(
         log::event!(
             target: SUBPROCESS_LOG_TARGET,
             log::Level::INFO,
-            stream,
-            stream_prefix=format!("{stream} "),
-            "{stream} {line}"
+            stderr=%(if stream == StreamOrigin::Stderr { line.as_str() } else {""}),
+            stdout=%(if stream == StreamOrigin::Stdout { line.as_str() } else {""}),
+            "output"
         );
     }
     Ok(())
@@ -95,12 +101,12 @@ impl Flake {
 
         let mut child = cmd.spawn()?;
         let stdout_read = tokio::task::spawn(
-            read_and_log_messages("O", child.stdout.take().unwrap())
+            read_and_log_messages(StreamOrigin::Stdout, child.stdout.take().unwrap())
                 .instrument(log::Span::current()),
         );
 
         let stderr_read = tokio::task::spawn(
-            read_and_log_messages("E", child.stderr.take().unwrap())
+            read_and_log_messages(StreamOrigin::Stderr, child.stderr.take().unwrap())
                 .instrument(log::Span::current()),
         );
 
