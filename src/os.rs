@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use chrono::{DateTime, Utc};
 pub use nixos::Nixos;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -14,9 +15,29 @@ pub enum Verb {
     Boot,
 }
 
+/// Information about a currently-running system closure
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct ClosureInfo {
+    /// Path of the closure
+    pub path: PathBuf,
+
+    /// Size of the closure, as given by `nix-path-info`
+    pub closure_size: usize,
+
+    /// Time the closure was registered in the nix store
+    pub registration_time: DateTime<Utc>,
+}
+
 pub(crate) trait NixOperatingSystem: fmt::Debug {
-    /// Checks if the target system is able to be deployed to.
-    async fn preflight_check_system(&self) -> Result<(), anyhow::Error>;
+    /// Returns information about the closure at a given path.
+    async fn closure_info(&self, closure_path: &str) -> Result<ClosureInfo, anyhow::Error>;
+
+    /// Returns a list of failed units on the system (indicating whether it's ready to be deployed to).
+    ///
+    /// If nothing is wrong with the system, the vector will be empty;
+    /// otherwise it contains the set of failed units. If anything went
+    /// wrong with checking the system health, it returns an error.
+    async fn preflight_check_system(&self) -> anyhow::Result<Result<(), Vec<String>>>;
 
     /// Checks if the built closure can be deployed to the system.
     async fn preflight_check_closure(
