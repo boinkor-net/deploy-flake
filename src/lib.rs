@@ -68,7 +68,7 @@ impl Flake {
     #[instrument(level = "DEBUG", err)]
     pub fn from_path<P: fmt::Debug + AsRef<Path>>(dir: P) -> Result<Self, anyhow::Error> {
         let dir = dir.as_ref().to_owned();
-        let info = nix::FlakeInfo::from_path(&dir).with_context(|| format!("Flake {:?}", &dir))?;
+        let info = nix::FlakeInfo::from_path(&dir).with_context(|| format!("Flake {:?}", dir))?;
         Ok(Flake {
             dir,
             resolved_path: info.path,

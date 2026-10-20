@@ -180,7 +180,7 @@ async fn deploy(
         &destination.hostname,
         Session::connect(&destination.hostname, KnownHosts::Strict)
             .await
-            .with_context(|| format!("Connecting to {:?}", &destination.hostname))?,
+            .with_context(|| format!("Connecting to {:?}", destination.hostname))?,
     );
     log::event!(log::Level::DEBUG, config=?destination.config_name, "Building");
     let built = flake
