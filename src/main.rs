@@ -5,7 +5,7 @@ use tracing as log;
 use tracing::instrument;
 
 use anyhow::Context;
-use backon::Retryable as _;
+use backon::RetryableWithContext as _;
 use clap::Parser;
 use deploy_flake::{Destination, Flake, Instrumentation};
 use duration_human::{DurationHuman, DurationHumanValidator};
@@ -133,6 +133,19 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[derive(Default, PartialEq, Eq)]
+struct Attempt(u32);
+
+impl Attempt {
+    fn next(&mut self) {
+        self.0 += 1;
+    }
+
+    fn timeout(&self) -> Duration {
+        Duration::from_secs(1) * self.0
+    }
+}
+
 #[instrument(skip(flake, destination, pre_activate_script, do_test, build_cmdline, copy_timeout), fields(flake=flake.resolved_path(), dest=destination.hostname) err)]
 async fn deploy(
     flake: Flake,
@@ -144,14 +157,23 @@ async fn deploy(
     build_cmdline: Vec<String>,
 ) -> Result<(), anyhow::Error> {
     log::event!(log::Level::DEBUG, flake=?flake.resolved_path(), host=?destination.hostname, "Copying");
-    let closure_copier =
-        || async { timeout(copy_timeout, flake.copy_closure(&destination.hostname)).await };
-    closure_copier
+    let closure_copier = |mut a: Attempt| async {
+        let r = timeout(
+            copy_timeout + a.timeout(),
+            flake.copy_closure(&destination.hostname),
+        )
+        .await;
+        a.next();
+        (a, r)
+    };
+    let (_, res) = closure_copier
         .retry(backon::ExponentialBuilder::default())
+        .context(Attempt::default())
         .notify(|error: &tokio::time::error::Elapsed, backoff: Duration| {
             log::warn!(%error, ?backoff, "Timed out copying the closure, retrying...");
         })
-        .await??;
+        .await;
+    res??;
 
     log::debug!("Connecting");
     let flavor = destination.os_flavor.on_connection(
